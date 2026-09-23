@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "maintena",
+  "version": "${version}",
+  "name": "Maintena",
+  "description": "",
+  "authors": [],
+  "contact": {},
+  "license": "All-Rights-Reserved",
+  "icon": "assets/maintena/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "fabric-datagen": [
+      "crqzycat.maintena.client.MaintenaDataGenerator"
+    ],
+    "client": [
+      "crqzycat.maintena.client.MaintenaClient"
+    ],
+    "main": [
+      "crqzycat.maintena.Maintena"
+    ]
+  },
+  "mixins": [
+    "maintena.mixins.json",
+    {
+      "config": "maintena.client.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}"
+  }
+}
