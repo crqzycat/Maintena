@@ -4,6 +4,7 @@
   "package": "crqzycat.maintena.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
+    "LoginMixin"
   ],
   "injectors": {
     "defaultRequire": 1

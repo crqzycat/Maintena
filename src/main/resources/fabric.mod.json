@@ -3,7 +3,7 @@
   "id": "maintena",
   "version": "${version}",
   "name": "Maintena",
-  "description": "",
+  "description": "Server-side maintenance mode system with whitelist management, auto-stop timer, and configurable messages.",
   "authors": [],
   "contact": {},
   "license": "All-Rights-Reserved",
