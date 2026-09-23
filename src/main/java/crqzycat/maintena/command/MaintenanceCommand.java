@@ -13,11 +13,11 @@ public class MaintenanceCommand {
     
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
         dispatcher.register(CommandManager.literal("maintenance")
-                .requires(source -> source.hasPermissionLevel(4)) // Only ops
+                .requires(source -> source.hasPermissionLevel(4))
                 .then(CommandManager.literal("on")
                         .then(CommandManager.argument("minutes", IntegerArgumentType.integer(0))
                                 .executes(ctx -> executeEnable(ctx, IntegerArgumentType.getInteger(ctx, "minutes"))))
-                        .executes(ctx -> executeEnable(ctx, 0))) // 0 = no auto-stop
+                        .executes(ctx -> executeEnable(ctx, 0)))
                 .then(CommandManager.literal("off")
                         .executes(ctx -> executeDisable(ctx)))
                 .then(CommandManager.literal("add")

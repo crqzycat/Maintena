@@ -18,14 +18,14 @@ public abstract class LoginMixin {
     public abstract void disconnect(Text reason);
     
     @Shadow
-    public GameProfile profile;
+    public GameProfile gameProfile;
     
     @Inject(method = "onGameProfileFetched", at = @At("HEAD"), cancellable = true)
     private void onGameProfileFetched(CallbackInfo ci) {
         MaintenanceManager manager = MaintenanceManager.getInstance();
         
-        if (manager.isEnabled() && profile != null) {
-            String playerName = profile.getName();
+        if (manager.isEnabled() && gameProfile != null) {
+            String playerName = gameProfile.getName();
             
             if (!manager.isWhitelisted(playerName)) {
                 String kickMessage = manager.getConfig().kickMessage;

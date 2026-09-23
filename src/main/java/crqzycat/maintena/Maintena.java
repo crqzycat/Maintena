@@ -11,13 +11,13 @@ public class Maintena implements ModInitializer {
     @Override
     public void onInitialize() {
         // Register command
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> 
-            MaintenanceCommand.register(dispatcher)
-        );
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+            MaintenanceCommand.register(dispatcher);
+        });
         
         // Initialize manager on server start
-        ServerLifecycleEvents.SERVER_STARTED.register(server -> 
-            MaintenanceManager.getInstance().setServer(server)
-        );
+        ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+            MaintenanceManager.getInstance().setServer(server);
+        });
     }
 }
