@@ -2,6 +2,8 @@ package crqzycat.maintena.maintenance;
 
 import crqzycat.maintena.util.PersistenceUtil;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.text.Text;
+import net.minecraft.server.network.ServerPlayerEntity;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -49,7 +51,14 @@ public class MaintenanceManager {
     }
     
     private void addOpsToWhitelist() {
-        // OPs would be added here but getPlayerManager not available in this version
+        if (server == null) return;
+        
+        // Add all operators to whitelist
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            if (server.getPlayerManager().isOperator(player.getGameProfile())) {
+                addWhitelistedPlayer(player.getName().getString());
+            }
+        }
     }
     
     public void enable(long durationMinutes) {
@@ -170,8 +179,13 @@ public class MaintenanceManager {
     }
     
     private void broadcastMessage(String message) {
-        // Messages would be broadcast here, but Text class not available
-        // Message: message
+        if (server == null) return;
+        
+        // Send message to all connected players
+        Text textMessage = Text.literal(message);
+        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+            player.sendMessage(textMessage, false);
+        }
     }
     
     public void setServer(MinecraftServer server) {

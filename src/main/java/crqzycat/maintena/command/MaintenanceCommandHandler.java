@@ -5,9 +5,9 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.commands.Commands;
-import net.minecraft.network.chat.Component;
+import net.minecraft.server.command.ServerCommandSource;
+import net.minecraft.server.command.CommandManager;
+import net.minecraft.text.Text;
 
 public class MaintenanceCommandHandler {
 
@@ -17,22 +17,22 @@ public class MaintenanceCommandHandler {
         });
     }
 
-    private static void registerMaintenanceCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
-        dispatcher.register(Commands.literal("maintenance")
+    private static void registerMaintenanceCommand(CommandDispatcher<ServerCommandSource> dispatcher) {
+        dispatcher.register(CommandManager.literal("maintenance")
 
-                .then(Commands.literal("on")
-                        .then(Commands.argument("minutes", IntegerArgumentType.integer(0))
+                .then(CommandManager.literal("on")
+                        .then(CommandManager.argument("minutes", IntegerArgumentType.integer(0))
                                 .executes(ctx -> {
                                     int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
 
                                     MaintenanceManager.getInstance().enable(minutes);
 
                                     if (minutes > 0) {
-                                        ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§a✓ Maintenance enabled for " + minutes + " minutes"), true);
+                                        ctx.getSource().sendFeedback(() ->
+                                                Text.literal("§a✓ Maintenance enabled for " + minutes + " minutes"), true);
                                     } else {
-                                        ctx.getSource().sendSuccess(() ->
-                                                Component.literal("§a✓ Maintenance enabled (manual stop)"), true);
+                                        ctx.getSource().sendFeedback(() ->
+                                                Text.literal("§a✓ Maintenance enabled (manual stop)"), true);
                                     }
 
                                     return 1;
@@ -40,54 +40,54 @@ public class MaintenanceCommandHandler {
                         .executes(ctx -> {
                             MaintenanceManager.getInstance().enable(0);
 
-                            ctx.getSource().sendSuccess(() ->
-                                    Component.literal("§a✓ Maintenance enabled (manual stop)"), true);
+                            ctx.getSource().sendFeedback(() ->
+                                    Text.literal("§a✓ Maintenance enabled (manual stop)"), true);
 
                             return 1;
                         }))
 
-                .then(Commands.literal("off")
+                .then(CommandManager.literal("off")
                         .executes(ctx -> {
                             MaintenanceManager.getInstance().disable();
 
-                            ctx.getSource().sendSuccess(() ->
-                                    Component.literal("§a✓ Maintenance disabled"), true);
+                            ctx.getSource().sendFeedback(() ->
+                                    Text.literal("§a✓ Maintenance disabled"), true);
 
                             return 1;
                         }))
 
-                .then(Commands.literal("add")
-                        .then(Commands.argument("player", StringArgumentType.word())
+                .then(CommandManager.literal("add")
+                        .then(CommandManager.argument("player", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
 
                                     MaintenanceManager.getInstance().addWhitelistedPlayer(player);
 
-                                    ctx.getSource().sendSuccess(() ->
-                                            Component.literal("§a✓ Added " + player + " to whitelist"), true);
+                                    ctx.getSource().sendFeedback(() ->
+                                            Text.literal("§a✓ Added " + player + " to whitelist"), true);
 
                                     return 1;
                                 })))
 
-                .then(Commands.literal("remove")
-                        .then(Commands.argument("player", StringArgumentType.word())
+                .then(CommandManager.literal("remove")
+                        .then(CommandManager.argument("player", StringArgumentType.word())
                                 .executes(ctx -> {
                                     String player = StringArgumentType.getString(ctx, "player");
 
                                     MaintenanceManager.getInstance().removeWhitelistedPlayer(player);
 
-                                    ctx.getSource().sendSuccess(() ->
-                                            Component.literal("§a✓ Removed " + player + " from whitelist"), true);
+                                    ctx.getSource().sendFeedback(() ->
+                                            Text.literal("§a✓ Removed " + player + " from whitelist"), true);
 
                                     return 1;
                                 })))
 
-                .then(Commands.literal("status")
+                .then(CommandManager.literal("status")
                         .executes(ctx -> {
                             String status = MaintenanceManager.getInstance().getStatus();
 
-                            ctx.getSource().sendSuccess(() ->
-                                    Component.literal(status), false);
+                            ctx.getSource().sendFeedback(() ->
+                                    Text.literal(status), false);
 
                             return 1;
                         })));
