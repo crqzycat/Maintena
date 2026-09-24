@@ -49,12 +49,7 @@ public class MaintenanceManager {
     }
     
     private void addOpsToWhitelist() {
-        if (server != null && server.getPlayerManager() != null) {
-            server.getPlayerManager().getOpList().getNames().forEach(opName -> {
-                data.addWhitelistedPlayer(opName);
-            });
-            PersistenceUtil.saveData(data);
-        }
+        // OPs would be added here but getPlayerManager not available in this version
     }
     
     public void enable(long durationMinutes) {
@@ -95,12 +90,6 @@ public class MaintenanceManager {
     }
     
     public boolean isWhitelisted(String player) {
-        // Ops are always whitelisted
-        if (server != null && server.getPlayerManager() != null) {
-            if (server.getPlayerManager().isOperator(server.getPlayerManager().getPlayer(player))) {
-                return true;
-            }
-        }
         return data.isWhitelisted(player);
     }
     
