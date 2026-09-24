@@ -1,5 +1,5 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version '1.7.10'
+    id 'net.fabricmc.fabric-loom' version '1.4.11'
     id 'maven-publish'
 }
 
@@ -28,23 +28,19 @@ fabricApi {
 }
 
 repositories {
-    maven {
-        url "https://maven.fabricmc.net/"
-    }
-    maven {
-        url "https://maven.architectury.dev/"
-    }
     mavenCentral()
+    maven { url "https://maven.fabricmc.net/" }
 }
 
 dependencies {
+    // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.layered {
-        officialMojangMappings()
-    }
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+
     modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
+    // JSON handling
     implementation "com.google.code.gson:gson:2.10.1"
 }
 
