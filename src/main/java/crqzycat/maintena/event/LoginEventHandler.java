@@ -17,7 +17,7 @@ public class LoginEventHandler {
                     }
 
                     // Prüft den Spielernamen vor dem Login.
-                    String playerName = handler.getGameProfile().getName();
+                    String playerName = handler.getProfileName();
 
                     if (!manager.isWhitelisted(playerName)) {
                         Component kickMessage = Component.literal(
