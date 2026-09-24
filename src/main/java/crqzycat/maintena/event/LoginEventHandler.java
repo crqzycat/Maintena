@@ -16,8 +16,8 @@ public class LoginEventHandler {
             }
 
             String playerName = handler.getPlayer()
-                    .getGameProfile()
-                    .getName();
+                    .nameAndId()
+                    .name();
 
             if (!manager.isWhitelisted(playerName)) {
                 handler.getPlayer().connection.disconnect(

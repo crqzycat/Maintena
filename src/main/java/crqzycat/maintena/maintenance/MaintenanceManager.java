@@ -60,7 +60,7 @@ public class MaintenanceManager {
         }
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (server.getPlayerList().isOp(player.getGameProfile())) {
+            if (server.getPlayerList().isOp(player.nameAndId())) {
                 addWhitelistedPlayer(player.getName().getString());
             }
         }
