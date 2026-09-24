@@ -38,10 +38,11 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings loom.officialMojangMappings()  // ← DAS FEHLTE!
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
-    
+
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-    
+
     // JSON handling
     implementation "com.google.code.gson:gson:2.10.1"
 }
