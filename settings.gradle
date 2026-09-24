@@ -5,6 +5,10 @@ pluginManagement {
             url = 'https://maven.fabricmc.net/'
         }
         maven {
+            name = 'Fabric Snapshots'
+            url = 'https://maven.fabricmc.net/snapshots/'
+        }
+        maven {
             name = 'Maven Central'
             url = 'https://repo.maven.apache.org/maven2/'
         }
