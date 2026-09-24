@@ -135,7 +135,10 @@ public class MaintenanceManager {
             public void run() {
                 if (data.enabled && data.isTimeExpired()) {
                     disable();
-                    checkCancel();
+                    if (checkTimer != null) {
+                        checkTimer.cancel();
+                        checkTimer = null;
+                    }
                     return;
                 }
                 
