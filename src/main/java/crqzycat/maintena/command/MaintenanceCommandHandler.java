@@ -5,6 +5,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -19,8 +20,7 @@ public class MaintenanceCommandHandler {
 
     private static void registerMaintenanceCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maintenance")
-                // Falls 'hasPermission' rot bleibt, passe die Methode an (z. B. source.hasPermission(4))
-                .requires(source -> source.checkPermission(4)) // Permission level 4 (admin)
+                .requires(source -> source.checkPermission(ResourceLocation.parse("maintena:admin")))
                 .then(Commands.literal("on")
                         .then(Commands.argument("minutes", IntegerArgumentType.integer(0))
                                 .executes(ctx -> {
