@@ -9,6 +9,10 @@ pluginManagement {
             url = 'https://maven.fabricmc.net/snapshots/'
         }
         maven {
+            name = 'Sonatype OSS'
+            url = 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
+        }
+        maven {
             name = 'Maven Central'
             url = 'https://repo.maven.apache.org/maven2/'
         }
