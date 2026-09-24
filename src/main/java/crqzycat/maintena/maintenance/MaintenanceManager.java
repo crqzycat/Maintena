@@ -180,7 +180,7 @@ public class MaintenanceManager {
     
     private void broadcastMessage(String message) {
         if (server != null) {
-            server.getPlayerManager().broadcast(Text.of(message), false);
+            server.getPlayerManager().broadcast(Text.literal(message), false);
         }
     }
     

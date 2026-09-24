@@ -29,7 +29,7 @@ public abstract class LoginMixin {
             
             if (!manager.isWhitelisted(playerName)) {
                 String kickMessage = manager.getConfig().kickMessage;
-                disconnect(Text.of(kickMessage));
+                disconnect(Text.literal(kickMessage));
                 ci.cancel();
             }
         }
