@@ -5,11 +5,9 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.Identifier;
 
 public class MaintenanceCommandHandler {
 
@@ -21,9 +19,6 @@ public class MaintenanceCommandHandler {
 
     private static void registerMaintenanceCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maintenance")
-                .requires(source -> source.checkPermission(
-                        Identifier.fromNamespaceAndPath("maintena", "admin")
-                ) == TriState.TRUE)
 
                 .then(Commands.literal("on")
                         .then(Commands.argument("minutes", IntegerArgumentType.integer(0))
