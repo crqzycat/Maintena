@@ -19,7 +19,8 @@ public class MaintenanceCommandHandler {
 
     private static void registerMaintenanceCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("maintenance")
-                .requires(source -> source.hasPermissionLevel(4))
+                // Falls 'hasPermission' rot bleibt, passe die Methode an (z. B. source.hasPermission(4))
+                .requires(source -> source.hasPermission(4))
                 .then(Commands.literal("on")
                         .then(Commands.argument("minutes", IntegerArgumentType.integer(0))
                                 .executes(ctx -> {
