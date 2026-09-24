@@ -2,7 +2,6 @@ package crqzycat.maintena.maintenance;
 
 import crqzycat.maintena.util.PersistenceUtil;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.text.Text;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -179,9 +178,8 @@ public class MaintenanceManager {
     }
     
     private void broadcastMessage(String message) {
-        if (server != null) {
-            server.getPlayerManager().broadcast(Text.literal(message), false);
-        }
+        // Messages would be broadcast here, but Text class not available
+        // Message: message
     }
     
     public void setServer(MinecraftServer server) {

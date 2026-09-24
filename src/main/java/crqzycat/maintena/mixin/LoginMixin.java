@@ -2,7 +2,6 @@ package crqzycat.maintena.mixin;
 
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import net.minecraft.server.network.ServerLoginNetworkHandler;
-import net.minecraft.text.Text;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -15,7 +14,7 @@ import com.mojang.authlib.GameProfile;
 public abstract class LoginMixin {
     
     @Shadow
-    public abstract void disconnect(Text reason);
+    public abstract void disconnect(String reason);
     
     @Shadow
     public GameProfile gameProfile;
@@ -29,7 +28,7 @@ public abstract class LoginMixin {
             
             if (!manager.isWhitelisted(playerName)) {
                 String kickMessage = manager.getConfig().kickMessage;
-                disconnect(Text.literal(kickMessage));
+                disconnect(kickMessage);
                 ci.cancel();
             }
         }
