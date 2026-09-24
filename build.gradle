@@ -38,10 +38,21 @@ repositories {
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    mappings loom.layered {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.21:2024.07.28@zip")
-    } // ← DAS FEHLTE!
+    dependencies {
+        // To change the versions see the gradle.properties file
+        minecraft "com.mojang:minecraft:${project.minecraft_version}"
+        mappings loom.officialMojangMappings()  // ← ERSETZE DIES:
+
+        // MIT DIESEM:
+        // mappings "net.fabricmc:yarn:${project.minecraft_version}+build.X:v2"
+
+        implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+        implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+        // JSON handling
+        implementation "com.google.code.gson:gson:2.10.1"
+    }
     implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
     implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
