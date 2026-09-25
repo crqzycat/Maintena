@@ -26,7 +26,7 @@ public class MaintenanceCommandHandler {
     ) {
         dispatcher.register(
                 Commands.literal("maintenance")
-                        .requires(source -> source.hasPermissionLevel(2))
+                        .requires(source -> source.permissions().hasPermission(2))
 
                         .then(Commands.literal("on")
                                 .then(Commands.argument(
