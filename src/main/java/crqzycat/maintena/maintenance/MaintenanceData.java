@@ -19,6 +19,11 @@ public class MaintenanceData {
                 "§eEnabled: §b%enabled%\n" +
                 "§eWhitelisted Players: §b%players%\n" +
                 "§eEnd Time: §b%endtime%";
+
+        // Shown in the server list (multiplayer screen) MOTD while maintenance is active
+        public String motdMaintenanceLine = "§c⚠ Under Maintenance";
+        public String motdMaintenanceTimed = "§eBack online in §b%time%";
+        public String motdMaintenanceNoTime = "§eNo estimated time given";
     }
     
     public void addWhitelistedPlayer(String player) {

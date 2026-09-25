@@ -145,6 +145,36 @@ public class MaintenanceManager {
                 .replace("%endtime%", endTimeStr);
     }
 
+    /**
+     * Baut den MOTD-Text für die Server-Liste (Multiplayer-Screen).
+     * Gibt null zurück, wenn keine Wartung läuft (dann bleibt der normale MOTD unverändert).
+     */
+    public String getMaintenanceMotd() {
+        if (!data.enabled) {
+            return null;
+        }
+
+        String line2;
+
+        if (data.endTime == -1) {
+            line2 = config.motdMaintenanceNoTime;
+        } else {
+            long remaining = data.getTimeRemaining();
+
+            if (remaining <= 0) {
+                line2 = config.motdMaintenanceNoTime;
+            } else {
+                long minutes = remaining / (60 * 1000);
+                long seconds = (remaining % (60 * 1000)) / 1000;
+                String timeStr = String.format("%d:%02d", minutes, seconds);
+
+                line2 = config.motdMaintenanceTimed.replace("%time%", timeStr);
+            }
+        }
+
+        return config.motdMaintenanceLine + "\n" + line2;
+    }
+
     private String formatEndTime(long endTime) {
         long remaining = endTime - System.currentTimeMillis();
 

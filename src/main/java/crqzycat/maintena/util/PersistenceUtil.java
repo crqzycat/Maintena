@@ -91,6 +91,9 @@ public class PersistenceUtil {
             json.addProperty("broadcastEnd", config.broadcastEnd);
             json.addProperty("broadcastWarning", config.broadcastWarning);
             json.addProperty("statusMessage", config.statusMessage);
+            json.addProperty("motdMaintenanceLine", config.motdMaintenanceLine);
+            json.addProperty("motdMaintenanceTimed", config.motdMaintenanceTimed);
+            json.addProperty("motdMaintenanceNoTime", config.motdMaintenanceNoTime);
             
             try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
                 GSON.toJson(json, writer);
@@ -116,6 +119,9 @@ public class PersistenceUtil {
                 if (json.has("broadcastEnd")) config.broadcastEnd = json.get("broadcastEnd").getAsString();
                 if (json.has("broadcastWarning")) config.broadcastWarning = json.get("broadcastWarning").getAsString();
                 if (json.has("statusMessage")) config.statusMessage = json.get("statusMessage").getAsString();
+                if (json.has("motdMaintenanceLine")) config.motdMaintenanceLine = json.get("motdMaintenanceLine").getAsString();
+                if (json.has("motdMaintenanceTimed")) config.motdMaintenanceTimed = json.get("motdMaintenanceTimed").getAsString();
+                if (json.has("motdMaintenanceNoTime")) config.motdMaintenanceNoTime = json.get("motdMaintenanceNoTime").getAsString();
             }
         } catch (IOException e) {
             e.printStackTrace();
