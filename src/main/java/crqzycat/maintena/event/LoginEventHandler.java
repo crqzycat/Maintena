@@ -19,7 +19,10 @@ public class LoginEventHandler {
                     .nameAndId()
                     .name();
 
-            if (!manager.isWhitelisted(playerName)) {
+            boolean isOp = server.getPlayerList()
+                    .isOp(handler.getPlayer().nameAndId());
+
+            if (!isOp && !manager.isWhitelisted(playerName)) {
                 handler.getPlayer().connection.disconnect(
                         Component.literal(manager.getConfig().kickMessage)
                 );

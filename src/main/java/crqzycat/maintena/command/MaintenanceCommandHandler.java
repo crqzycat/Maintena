@@ -100,10 +100,20 @@ public class MaintenanceCommandHandler {
                                                         StringArgumentType.word()
                                                 )
                                                 .suggests((context, builder) -> {
-                                                    // Alle Spieler suggerieren (online + offline)
+                                                    // Alle Spieler suggerieren, außer die bereits auf der Whitelist stehen
+                                                    MaintenanceManager manager =
+                                                            MaintenanceManager.getInstance();
+
+                                                    java.util.Collection<String> candidates =
+                                                            new java.util.ArrayList<>(
+                                                                    manager.getAllPlayerNames()
+                                                            );
+                                                    candidates.removeAll(
+                                                            manager.getWhitelistedPlayers()
+                                                    );
+
                                                     return SharedSuggestionProvider.suggest(
-                                                            MaintenanceManager.getInstance()
-                                                                    .getAllPlayerNames(),
+                                                            candidates,
                                                             builder
                                                     );
                                                 })
