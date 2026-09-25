@@ -122,6 +122,26 @@ public class MaintenanceManager {
         }
     }
 
+    /**
+     * Lädt config.json und maintenance.json neu von der Festplatte,
+     * ohne den Server neu zu starten.
+     */
+    public void reload() {
+        this.data = PersistenceUtil.loadData();
+        this.config = PersistenceUtil.loadConfig();
+
+        if (data.enabled && data.endTime != -1) {
+            startAutoStopTimer();
+        } else {
+            stopAutoStopTimer();
+        }
+    }
+
+    public void clearWhitelist() {
+        data.clearWhitelist();
+        PersistenceUtil.saveData(data);
+    }
+
     public void addWhitelistedPlayer(String player) {
         data.addWhitelistedPlayer(player);
         PersistenceUtil.saveData(data);

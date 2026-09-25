@@ -26,6 +26,7 @@ public class MaintenanceCommandHandler {
     ) {
         dispatcher.register(
                 Commands.literal("maintenance")
+                        .requires(source -> source.hasPermission(2))
 
                         .then(Commands.literal("on")
                                 .then(Commands.argument(
@@ -187,6 +188,36 @@ public class MaintenanceCommandHandler {
                                     ctx.getSource().sendSuccess(
                                             () -> Component.literal(status),
                                             false
+                                    );
+
+                                    return 1;
+                                })
+                        )
+
+                        .then(Commands.literal("reload")
+                                .executes(ctx -> {
+                                    MaintenanceManager.getInstance().reload();
+
+                                    ctx.getSource().sendSuccess(
+                                            () -> Component.literal(
+                                                    "§a✓ Maintenance config reloaded"
+                                            ),
+                                            true
+                                    );
+
+                                    return 1;
+                                })
+                        )
+
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> {
+                                    MaintenanceManager.getInstance().clearWhitelist();
+
+                                    ctx.getSource().sendSuccess(
+                                            () -> Component.literal(
+                                                    "§a✓ Whitelist cleared"
+                                            ),
+                                            true
                                     );
 
                                     return 1;

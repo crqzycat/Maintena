@@ -86,7 +86,6 @@ public class PersistenceUtil {
             }
             
             JsonObject json = new JsonObject();
-            json.addProperty("kickMessage", config.kickMessage);
             json.addProperty("broadcastStart", config.broadcastStart);
             json.addProperty("broadcastEnd", config.broadcastEnd);
             json.addProperty("broadcastWarning", config.broadcastWarning);
@@ -114,7 +113,6 @@ public class PersistenceUtil {
         try (FileReader reader = new FileReader(CONFIG_FILE)) {
             JsonObject json = GSON.fromJson(reader, JsonObject.class);
             if (json != null) {
-                if (json.has("kickMessage")) config.kickMessage = json.get("kickMessage").getAsString();
                 if (json.has("broadcastStart")) config.broadcastStart = json.get("broadcastStart").getAsString();
                 if (json.has("broadcastEnd")) config.broadcastEnd = json.get("broadcastEnd").getAsString();
                 if (json.has("broadcastWarning")) config.broadcastWarning = json.get("broadcastWarning").getAsString();

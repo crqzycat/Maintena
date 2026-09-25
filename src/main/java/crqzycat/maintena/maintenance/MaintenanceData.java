@@ -11,7 +11,6 @@ public class MaintenanceData {
     public long endTime = -1; // -1 = no auto-stop set
     
     public static class Config {
-        public String kickMessage = "§cServer is currently under maintenance!\n§fPlease try again later.";
         public String broadcastStart = "§6[§cMaintenance§6] §cServer entering maintenance mode.";
         public String broadcastEnd = "§6[§cMaintenance§6] §aServer maintenance complete!";
         public String broadcastWarning = "§6[§cMaintenance§6] §eServer will exit maintenance in §b%time% §eminutes.";
@@ -27,15 +26,22 @@ public class MaintenanceData {
     }
     
     public void addWhitelistedPlayer(String player) {
-        whitelistedPlayers.add(player);
+        if (!isWhitelisted(player)) {
+            whitelistedPlayers.add(player);
+        }
     }
     
     public void removeWhitelistedPlayer(String player) {
-        whitelistedPlayers.remove(player);
+        whitelistedPlayers.removeIf(p -> p.equalsIgnoreCase(player));
     }
     
     public boolean isWhitelisted(String player) {
-        return whitelistedPlayers.contains(player);
+        for (String whitelisted : whitelistedPlayers) {
+            if (whitelisted.equalsIgnoreCase(player)) {
+                return true;
+            }
+        }
+        return false;
     }
     
     public void clearWhitelist() {
