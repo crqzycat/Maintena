@@ -84,6 +84,28 @@ public class MaintenanceManager {
 
         if (server != null) {
             broadcastMessage(config.broadcastStart);
+            kickNonWhitelistedPlayers();
+        }
+    }
+
+    /**
+     * Kickt alle aktuell online Spieler, die weder auf der Whitelist stehen
+     * noch OP sind. Wird beim Einschalten der Wartung aufgerufen.
+     */
+    private void kickNonWhitelistedPlayers() {
+        if (server == null) {
+            return;
+        }
+
+        Component kickMessage = Component.literal(getMaintenanceMotd());
+
+        // Kopie der Liste, da disconnect() die Original-Liste während der Iteration verändert
+        for (ServerPlayer player : new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
+            boolean isOp = server.getPlayerList().isOp(player.nameAndId());
+
+            if (!isOp && !isWhitelisted(player.getName().getString())) {
+                player.connection.disconnect(kickMessage);
+            }
         }
     }
 

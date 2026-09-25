@@ -24,7 +24,7 @@ public class LoginEventHandler {
 
             if (!isOp && !manager.isWhitelisted(playerName)) {
                 handler.getPlayer().connection.disconnect(
-                        Component.literal(manager.getConfig().kickMessage)
+                        Component.literal(manager.getMaintenanceMotd())
                 );
             }
         });
