@@ -326,34 +326,31 @@ public class MaintenanceManager {
             }
         }
         
-        // Versuche, offline Spieler aus Dateiverzeichnis zu laden
-        if (server != null) {
-            java.io.File playersDir = server.getWorldPath(
-                    net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR
-            ).toFile();
-            
-            if (playersDir.exists()) {
-                java.io.File[] files = playersDir.listFiles((dir, name) -> name.endsWith(".dat"));
-                if (files != null) {
-                    for (java.io.File file : files) {
-                        String playerName = file.getName().replace(".dat", "");
-                        // Entferne UUID Format und nutze den Namen
-                        if (!playerName.contains("-")) {
-                            allPlayers.add(playerName);
-                        } else {
-                            // Falls UUID Format, versuche aus online Spielern zu holen
-                            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                                if (player.getStringUUID().replace("-", "").equals(playerName)) {
-                                    allPlayers.add(player.getName().getString());
-                                    break;
-                                }
-                            }
-                        }
+        // usercache.json enthält Name + UUID von jedem Spieler, der jemals gejoint ist
+        // (auch offline Spieler) - die playerdata-Dateien sind immer nach UUID benannt,
+        // daher lässt sich der Name daraus nicht rekonstruieren.
+        java.io.File usercacheFile = net.fabricmc.loader.api.FabricLoader.getInstance()
+                .getGameDir()
+                .resolve("usercache.json")
+                .toFile();
+
+        if (usercacheFile.exists()) {
+            try (java.io.FileReader reader = new java.io.FileReader(usercacheFile)) {
+                com.google.gson.JsonArray entries =
+                        com.google.gson.JsonParser.parseReader(reader).getAsJsonArray();
+
+                for (com.google.gson.JsonElement element : entries) {
+                    com.google.gson.JsonObject entry = element.getAsJsonObject();
+
+                    if (entry.has("name")) {
+                        allPlayers.add(entry.get("name").getAsString());
                     }
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
-        
+
         return allPlayers;
     }
 
