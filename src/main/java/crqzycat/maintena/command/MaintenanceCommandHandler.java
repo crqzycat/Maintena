@@ -10,6 +10,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.Permissions;
 
 public class MaintenanceCommandHandler {
 
@@ -26,7 +27,9 @@ public class MaintenanceCommandHandler {
     ) {
         dispatcher.register(
                 Commands.literal("maintenance")
-                        .requires(source -> source.permissions().hasPermission(2))
+                        .requires(source -> source.permissions()
+                                .hasPermission(
+                                        Permissions.COMMANDS_GAMEMASTER))
 
                         .then(Commands.literal("on")
                                 .then(Commands.argument(
