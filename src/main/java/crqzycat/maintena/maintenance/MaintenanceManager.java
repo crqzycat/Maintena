@@ -239,4 +239,56 @@ public class MaintenanceManager {
             startAutoStopTimer();
         }
     }
+
+    /**
+     * Gibt alle bekannten Spielernamen zurück (online und offline)
+     * Dies werden alle Spieler sein, die jemals auf den Server gejoined sind
+     */
+    public java.util.Collection<String> getAllPlayerNames() {
+        java.util.Set<String> allPlayers = new java.util.HashSet<>();
+        
+        // Online Spieler hinzufügen
+        if (server != null) {
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                allPlayers.add(player.getName().getString());
+            }
+        }
+        
+        // Versuche, offline Spieler aus Dateiverzeichnis zu laden
+        if (server != null) {
+            java.io.File playersDir = server.getWorldPath(
+                    net.minecraft.world.level.storage.LevelResource.PLAYER_DATA_DIR
+            ).toFile();
+            
+            if (playersDir.exists()) {
+                java.io.File[] files = playersDir.listFiles((dir, name) -> name.endsWith(".dat"));
+                if (files != null) {
+                    for (java.io.File file : files) {
+                        String playerName = file.getName().replace(".dat", "");
+                        // Entferne UUID Format und nutze den Namen
+                        if (!playerName.contains("-")) {
+                            allPlayers.add(playerName);
+                        } else {
+                            // Falls UUID Format, versuche aus online Spielern zu holen
+                            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                                if (player.getStringUUID().replace("-", "").equals(playerName)) {
+                                    allPlayers.add(player.getName().getString());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return allPlayers;
+    }
+
+    /**
+     * Gibt nur die Spieler zurück, die auf der Whitelist sind
+     */
+    public java.util.Collection<String> getWhitelistedPlayers() {
+        return new java.util.ArrayList<>(data.whitelistedPlayers);
+    }
 }

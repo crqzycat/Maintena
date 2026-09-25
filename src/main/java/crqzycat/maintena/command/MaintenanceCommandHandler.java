@@ -3,10 +3,12 @@ package crqzycat.maintena.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 
 public class MaintenanceCommandHandler {
@@ -97,6 +99,14 @@ public class MaintenanceCommandHandler {
                                                         "player",
                                                         StringArgumentType.word()
                                                 )
+                                                .suggests((context, builder) -> {
+                                                    // Alle Spieler suggerieren (online + offline)
+                                                    return SharedSuggestionProvider.suggest(
+                                                            MaintenanceManager.getInstance()
+                                                                    .getAllPlayerNames(),
+                                                            builder
+                                                    );
+                                                })
                                                 .executes(ctx -> {
                                                     String player =
                                                             StringArgumentType.getString(
@@ -126,6 +136,14 @@ public class MaintenanceCommandHandler {
                                                         "player",
                                                         StringArgumentType.word()
                                                 )
+                                                .suggests((context, builder) -> {
+                                                    // Nur Spieler auf Whitelist suggerieren
+                                                    return SharedSuggestionProvider.suggest(
+                                                            MaintenanceManager.getInstance()
+                                                                    .getWhitelistedPlayers(),
+                                                            builder
+                                                    );
+                                                })
                                                 .executes(ctx -> {
                                                     String player =
                                                             StringArgumentType.getString(
