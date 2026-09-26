@@ -19,8 +19,11 @@ import java.time.DayOfWeek;
 import java.util.List;
 
 /**
- * Globaler /maintena Befehl: Reload für Maintenance + Restart, sowie alle
- * restart-bezogenen Sub-Commands (/maintena restart ...).
+ * Globaler /maintena Befehl: Reload für Maintenance + Restart.
+ * Hängt zusätzlich den kompletten "restart"-Baum unter /maintena restart
+ * UND als eigenständigen /restart Befehl ein, sowie den kompletten
+ * "maintenance"-Baum (aus MaintenanceCommandHandler) unter /maintena maintenance
+ * (der eigenständige /maintenance Befehl bleibt davon unberührt bestehen).
  */
 public class MaintenaCommandHandler {
 
@@ -35,7 +38,7 @@ public class MaintenaCommandHandler {
             List.of("1", "5", "10", "15", "30", "60");
 
     private static final List<String> HOUR_SUGGESTIONS =
-            List.of("0", "4", "6", "12", "18", "22");
+            List.of("0", "6", "12", "18", "23");
 
     private static final List<String> MINUTE_SUGGESTIONS =
             List.of("0", "15", "30", "45");
@@ -66,14 +69,24 @@ public class MaintenaCommandHandler {
                                 })
                         )
 
+                        // /maintena restart ... (identischer Baum wie das eigenständige /restart)
                         .then(buildRestartTree())
+
+                        // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
+                        .then(MaintenanceCommandHandler.buildMaintenanceCommand())
         );
+
+        // Eigenständiger /restart Befehl, funktional identisch zu /maintena restart
+        dispatcher.register(buildRestartTree());
     }
 
-    // ==================== /maintena restart ====================
+    // ==================== /maintena restart  &  /restart ====================
 
     private static LiteralArgumentBuilder<CommandSourceStack> buildRestartTree() {
         return Commands.literal("restart")
+                .requires(source -> source.permissions()
+                        .hasPermission(Permissions.COMMANDS_GAMEMASTER))
+
                 .then(Commands.literal("now")
                         .executes(ctx -> {
                             RestartManager.getInstance().restartNow();

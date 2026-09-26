@@ -1,8 +1,8 @@
 package crqzycat.maintena.command;
 
-import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -17,15 +17,19 @@ public class MaintenanceCommandHandler {
     public static void register() {
         CommandRegistrationCallback.EVENT.register(
                 (dispatcher, registryAccess, environment) -> {
-                    registerMaintenanceCommand(dispatcher);
+                    dispatcher.register(buildMaintenanceCommand());
                 }
         );
     }
 
-    private static void registerMaintenanceCommand(
-            CommandDispatcher<CommandSourceStack> dispatcher
-    ) {
-        dispatcher.register(
+    /**
+     * Baut den kompletten "maintenance"-Befehlsbaum. Wird sowohl für den
+     * eigenständigen /maintenance Befehl verwendet, als auch von
+     * MaintenaCommandHandler, um denselben Baum unter /maintena maintenance
+     * verfügbar zu machen.
+     */
+    public static LiteralArgumentBuilder<CommandSourceStack> buildMaintenanceCommand() {
+        return
                 Commands.literal("maintenance")
                         .requires(source -> source.permissions()
                                 .hasPermission(
@@ -196,7 +200,6 @@ public class MaintenanceCommandHandler {
                                     return 1;
                                 })
                         )
-
                         .then(Commands.literal("clear")
                                 .executes(ctx -> {
                                     MaintenanceManager.getInstance().clearWhitelist();
@@ -210,7 +213,6 @@ public class MaintenanceCommandHandler {
 
                                     return 1;
                                 })
-                        )
-        );
+                        );
     }
 }
