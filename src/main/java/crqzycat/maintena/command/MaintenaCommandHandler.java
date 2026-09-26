@@ -24,6 +24,8 @@ import java.util.List;
  * UND als eigenständigen /restart Befehl ein, sowie den kompletten
  * "maintenance"-Baum (aus MaintenanceCommandHandler) unter /maintena maintenance
  * (der eigenständige /maintenance Befehl bleibt davon unberührt bestehen).
+ * Der bloße Aufruf von /restart bzw. /maintena restart (ohne Subcommand)
+ * löst direkt einen sofortigen Restart aus (ehemals /restart now).
  */
 public class MaintenaCommandHandler {
 
@@ -87,18 +89,16 @@ public class MaintenaCommandHandler {
                 .requires(source -> source.permissions()
                         .hasPermission(Permissions.COMMANDS_GAMEMASTER))
 
-                .then(Commands.literal("now")
-                        .executes(ctx -> {
-                            RestartManager.getInstance().restartNow();
+                .executes(ctx -> {
+                    RestartManager.getInstance().restartNow();
 
-                            ctx.getSource().sendSuccess(
-                                    () -> Component.literal("§a✓ Restarting server now..."),
-                                    true
-                            );
+                    ctx.getSource().sendSuccess(
+                            () -> Component.literal("§a✓ Restarting server now..."),
+                            true
+                    );
 
-                            return 1;
-                        })
-                )
+                    return 1;
+                })
 
                 .then(Commands.literal("in")
                         .then(Commands.argument("minutes", IntegerArgumentType.integer(1))
