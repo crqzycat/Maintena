@@ -89,6 +89,7 @@ public class RestartManager {
         activeRestartTime = System.currentTimeMillis() + minutes * 60_000L;
         activeScheduleId = null;
         announcedMilestones.clear();
+        skipMilestonesAbove(minutes);
     }
 
     public boolean cancelActiveCountdown() {
@@ -333,6 +334,23 @@ public class RestartManager {
             activeRestartTime = next.nextTrigger;
             activeScheduleId = next.id;
             announcedMilestones.clear();
+
+            // Aufrunden, damit die aktuell zutreffende Schwelle nicht versehentlich mit übersprungen wird
+            long totalMinutes = (untilTrigger + 59_999L) / 60_000L;
+            skipMilestonesAbove(totalMinutes);
+        }
+    }
+
+    /**
+     * Markiert alle Warnschwellen, die über der tatsächlichen Countdown-Dauer liegen,
+     * als "bereits angesagt", damit sie beim Start nicht alle auf einmal gebroadcastet werden.
+     * Bsp.: "restart in 1" -> nur die 1-Minuten-Warnung wird gezeigt, nicht 30/15/10/5/3/2/1 gleichzeitig.
+     */
+    private void skipMilestonesAbove(long totalMinutes) {
+        for (int milestone : config.warningMinutes) {
+            if (milestone > totalMinutes) {
+                announcedMilestones.add(milestone);
+            }
         }
     }
 
