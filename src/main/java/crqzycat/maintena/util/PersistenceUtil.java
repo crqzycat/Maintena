@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import crqzycat.maintena.maintenance.MaintenanceData;
+import crqzycat.maintena.restart.RestartData;
 import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.File;
@@ -19,6 +20,8 @@ public class PersistenceUtil {
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("maintena");
     private static final File DATA_FILE = CONFIG_DIR.resolve("maintenance.json").toFile();
     private static final File CONFIG_FILE = CONFIG_DIR.resolve("config.json").toFile();
+    private static final File RESTART_DATA_FILE = CONFIG_DIR.resolve("restarts.json").toFile();
+    private static final File RESTART_CONFIG_FILE = CONFIG_DIR.resolve("restart-config.json").toFile();
     
     static {
         try {
@@ -126,5 +129,65 @@ public class PersistenceUtil {
         }
         
         return config;
+    }
+
+    // ==================== Restart Schedules ====================
+
+    public static void saveRestartData(RestartData data) {
+        try {
+            if (!RESTART_DATA_FILE.exists()) {
+                RESTART_DATA_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(RESTART_DATA_FILE)) {
+                GSON.toJson(data, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static RestartData loadRestartData() {
+        if (!RESTART_DATA_FILE.exists()) {
+            return new RestartData();
+        }
+
+        try (FileReader reader = new FileReader(RESTART_DATA_FILE)) {
+            RestartData data = GSON.fromJson(reader, RestartData.class);
+            return data != null ? data : new RestartData();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new RestartData();
+        }
+    }
+
+    public static void saveRestartConfig(RestartData.Config config) {
+        try {
+            if (!RESTART_CONFIG_FILE.exists()) {
+                RESTART_CONFIG_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(RESTART_CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static RestartData.Config loadRestartConfig() {
+        if (!RESTART_CONFIG_FILE.exists()) {
+            RestartData.Config config = new RestartData.Config();
+            saveRestartConfig(config); // Create default config
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(RESTART_CONFIG_FILE)) {
+            RestartData.Config config = GSON.fromJson(reader, RestartData.Config.class);
+            return config != null ? config : new RestartData.Config();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new RestartData.Config();
+        }
     }
 }

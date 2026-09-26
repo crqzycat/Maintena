@@ -197,21 +197,6 @@ public class MaintenanceCommandHandler {
                                 })
                         )
 
-                        .then(Commands.literal("reload")
-                                .executes(ctx -> {
-                                    MaintenanceManager.getInstance().reload();
-
-                                    ctx.getSource().sendSuccess(
-                                            () -> Component.literal(
-                                                    "§a✓ Maintenance config reloaded"
-                                            ),
-                                            true
-                                    );
-
-                                    return 1;
-                                })
-                        )
-
                         .then(Commands.literal("clear")
                                 .executes(ctx -> {
                                     MaintenanceManager.getInstance().clearWhitelist();
