@@ -34,8 +34,11 @@ public class MaintenaCommandHandler {
     private static final List<String> MANUAL_MINUTES_SUGGESTIONS =
             List.of("1", "5", "10", "15", "30", "60");
 
-    private static final List<String> TIME_SUGGESTIONS =
-            List.of("00:00", "04:00", "06:00", "12:00", "18:00", "22:00");
+    private static final List<String> HOUR_SUGGESTIONS =
+            List.of("0", "4", "6", "12", "18", "22");
+
+    private static final List<String> MINUTE_SUGGESTIONS =
+            List.of("0", "15", "30", "45");
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register(
@@ -190,26 +193,31 @@ public class MaintenaCommandHandler {
                 )
 
                 .then(Commands.literal("time")
-                        .then(Commands.argument("time", StringArgumentType.word())
+                        .then(Commands.argument("hour", IntegerArgumentType.integer(0, 23))
                                 .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(TIME_SUGGESTIONS, builder))
+                                        SharedSuggestionProvider.suggest(HOUR_SUGGESTIONS, builder))
 
-                                .then(Commands.literal("daily")
-                                        .executes(ctx -> addDaily(ctx, null))
-                                        .then(Commands.argument("name", StringArgumentType.word())
-                                                .executes(ctx -> addDaily(
-                                                        ctx, StringArgumentType.getString(ctx, "name")))
-                                        )
-                                )
+                                .then(Commands.argument("minute", IntegerArgumentType.integer(0, 59))
+                                        .suggests((context, builder) ->
+                                                SharedSuggestionProvider.suggest(MINUTE_SUGGESTIONS, builder))
 
-                                .then(Commands.literal("weekly")
-                                        .then(Commands.argument("weekday", StringArgumentType.word())
-                                                .suggests((context, builder) ->
-                                                        SharedSuggestionProvider.suggest(WEEKDAYS, builder))
-                                                .executes(ctx -> addWeekly(ctx, null))
+                                        .then(Commands.literal("daily")
+                                                .executes(ctx -> addDaily(ctx, null))
                                                 .then(Commands.argument("name", StringArgumentType.word())
-                                                        .executes(ctx -> addWeekly(
+                                                        .executes(ctx -> addDaily(
                                                                 ctx, StringArgumentType.getString(ctx, "name")))
+                                                )
+                                        )
+
+                                        .then(Commands.literal("weekly")
+                                                .then(Commands.argument("weekday", StringArgumentType.word())
+                                                        .suggests((context, builder) ->
+                                                                SharedSuggestionProvider.suggest(WEEKDAYS, builder))
+                                                        .executes(ctx -> addWeekly(ctx, null))
+                                                        .then(Commands.argument("name", StringArgumentType.word())
+                                                                .executes(ctx -> addWeekly(
+                                                                        ctx, StringArgumentType.getString(ctx, "name")))
+                                                        )
                                                 )
                                         )
                                 )
@@ -240,15 +248,11 @@ public class MaintenaCommandHandler {
     }
 
     private static int addDaily(CommandContext<CommandSourceStack> ctx, String name) {
-        int[] time = parseTime(ctx);
-
-        if (time == null) {
-            ctx.getSource().sendFailure(Component.literal("§c✗ Invalid time format, use HH:mm"));
-            return 0;
-        }
+        int hour = IntegerArgumentType.getInteger(ctx, "hour");
+        int minute = IntegerArgumentType.getInteger(ctx, "minute");
 
         RestartSchedule schedule = RestartManager.getInstance()
-                .addTimeSchedule(time[0], time[1], RestartSchedule.Frequency.DAILY, null, name);
+                .addTimeSchedule(hour, minute, RestartSchedule.Frequency.DAILY, null, name);
 
         if (schedule == null) {
             ctx.getSource().sendFailure(
@@ -259,7 +263,8 @@ public class MaintenaCommandHandler {
 
         ctx.getSource().sendSuccess(
                 () -> Component.literal(
-                        "§a✓ Scheduled restart \"" + schedule.id + "\" added: daily at " + formatTime(time)
+                        "§a✓ Scheduled restart \"" + schedule.id + "\" added: daily at "
+                                + formatTime(hour, minute)
                 ),
                 true
         );
@@ -268,12 +273,8 @@ public class MaintenaCommandHandler {
     }
 
     private static int addWeekly(CommandContext<CommandSourceStack> ctx, String name) {
-        int[] time = parseTime(ctx);
-
-        if (time == null) {
-            ctx.getSource().sendFailure(Component.literal("§c✗ Invalid time format, use HH:mm"));
-            return 0;
-        }
+        int hour = IntegerArgumentType.getInteger(ctx, "hour");
+        int minute = IntegerArgumentType.getInteger(ctx, "minute");
 
         String weekdayStr = StringArgumentType.getString(ctx, "weekday");
         DayOfWeek weekday = parseWeekday(weekdayStr);
@@ -284,7 +285,7 @@ public class MaintenaCommandHandler {
         }
 
         RestartSchedule schedule = RestartManager.getInstance()
-                .addTimeSchedule(time[0], time[1], RestartSchedule.Frequency.WEEKLY, weekday, name);
+                .addTimeSchedule(hour, minute, RestartSchedule.Frequency.WEEKLY, weekday, name);
 
         if (schedule == null) {
             ctx.getSource().sendFailure(
@@ -296,34 +297,12 @@ public class MaintenaCommandHandler {
         ctx.getSource().sendSuccess(
                 () -> Component.literal(
                         "§a✓ Scheduled restart \"" + schedule.id + "\" added: every "
-                                + capitalize(weekdayStr) + " at " + formatTime(time)
+                                + capitalize(weekdayStr) + " at " + formatTime(hour, minute)
                 ),
                 true
         );
 
         return 1;
-    }
-
-    private static int[] parseTime(CommandContext<CommandSourceStack> ctx) {
-        String raw = StringArgumentType.getString(ctx, "time");
-        String[] parts = raw.split(":");
-
-        if (parts.length != 2) {
-            return null;
-        }
-
-        try {
-            int hour = Integer.parseInt(parts[0]);
-            int minute = Integer.parseInt(parts[1]);
-
-            if (hour < 0 || hour > 23 || minute < 0 || minute > 59) {
-                return null;
-            }
-
-            return new int[]{hour, minute};
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     private static DayOfWeek parseWeekday(String raw) {
@@ -336,8 +315,8 @@ public class MaintenaCommandHandler {
         return null;
     }
 
-    private static String formatTime(int[] time) {
-        return String.format("%02d:%02d", time[0], time[1]);
+    private static String formatTime(int hour, int minute) {
+        return String.format("%02d:%02d", hour, minute);
     }
 
     private static String capitalize(String s) {
