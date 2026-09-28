@@ -4,6 +4,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
+import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.command.MaintenanceCommandHandler;
 import crqzycat.maintena.command.MaintenaCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
@@ -23,6 +24,7 @@ public class Maintena implements ModInitializer {
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             MaintenanceManager.getInstance().setServer(server);
             RestartManager.getInstance().setServer(server);
+            AnnouncementManager.getInstance().setServer(server);
         });
     }
 }

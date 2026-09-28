@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
@@ -24,6 +25,7 @@ import java.util.List;
  * UND als eigenständigen /restart Befehl ein, sowie den kompletten
  * "maintenance"-Baum (aus MaintenanceCommandHandler) unter /maintena maintenance
  * (der eigenständige /maintenance Befehl bleibt davon unberührt bestehen).
+ * Ebenso der "announce"-Baum (AnnouncementCommandHandler) unter /maintena announce und als /announce.
  * Der bloße Aufruf von /restart bzw. /maintena restart (ohne Subcommand)
  * löst direkt einen sofortigen Restart aus (ehemals /restart now).
  */
@@ -61,6 +63,7 @@ public class MaintenaCommandHandler {
                                 .executes(ctx -> {
                                     MaintenanceManager.getInstance().reload();
                                     RestartManager.getInstance().reload();
+                                    AnnouncementManager.getInstance().reload();
 
                                     ctx.getSource().sendSuccess(
                                             () -> Component.literal("§a✓ Maintena config reloaded"),
@@ -74,12 +77,18 @@ public class MaintenaCommandHandler {
                         // /maintena restart ... (identischer Baum wie das eigenständige /restart)
                         .then(buildRestartTree())
 
+                        // /maintena announce ... (identischer Baum wie das eigenständige /announce)
+                        .then(AnnouncementCommandHandler.buildAnnounceTree())
+
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                         .then(MaintenanceCommandHandler.buildMaintenanceCommand())
         );
 
         // Eigenständiger /restart Befehl, funktional identisch zu /maintena restart
         dispatcher.register(buildRestartTree());
+
+        // Eigenständiger /announce Befehl, funktional identisch zu /maintena announce
+        dispatcher.register(AnnouncementCommandHandler.buildAnnounceTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

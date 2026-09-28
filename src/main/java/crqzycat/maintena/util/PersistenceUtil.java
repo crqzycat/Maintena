@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import crqzycat.maintena.announcement.AnnouncementData;
 import crqzycat.maintena.maintenance.MaintenanceData;
 import crqzycat.maintena.restart.RestartData;
 import net.fabricmc.loader.api.FabricLoader;
@@ -22,6 +23,8 @@ public class PersistenceUtil {
     private static final File CONFIG_FILE = CONFIG_DIR.resolve("config.json").toFile();
     private static final File RESTART_DATA_FILE = CONFIG_DIR.resolve("restarts.json").toFile();
     private static final File RESTART_CONFIG_FILE = CONFIG_DIR.resolve("restart-config.json").toFile();
+    private static final File ANNOUNCEMENT_DATA_FILE = CONFIG_DIR.resolve("announcements.json").toFile();
+    private static final File ANNOUNCEMENT_CONFIG_FILE = CONFIG_DIR.resolve("announcement-config.json").toFile();
     
     static {
         try {
@@ -188,6 +191,66 @@ public class PersistenceUtil {
         } catch (IOException e) {
             e.printStackTrace();
             return new RestartData.Config();
+        }
+    }
+
+    // ==================== Announcement Schedules ====================
+
+    public static void saveAnnouncementData(AnnouncementData data) {
+        try {
+            if (!ANNOUNCEMENT_DATA_FILE.exists()) {
+                ANNOUNCEMENT_DATA_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(ANNOUNCEMENT_DATA_FILE)) {
+                GSON.toJson(data, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static AnnouncementData loadAnnouncementData() {
+        if (!ANNOUNCEMENT_DATA_FILE.exists()) {
+            return new AnnouncementData();
+        }
+
+        try (FileReader reader = new FileReader(ANNOUNCEMENT_DATA_FILE)) {
+            AnnouncementData data = GSON.fromJson(reader, AnnouncementData.class);
+            return data != null ? data : new AnnouncementData();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new AnnouncementData();
+        }
+    }
+
+    public static void saveAnnouncementConfig(AnnouncementData.Config config) {
+        try {
+            if (!ANNOUNCEMENT_CONFIG_FILE.exists()) {
+                ANNOUNCEMENT_CONFIG_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(ANNOUNCEMENT_CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static AnnouncementData.Config loadAnnouncementConfig() {
+        if (!ANNOUNCEMENT_CONFIG_FILE.exists()) {
+            AnnouncementData.Config config = new AnnouncementData.Config();
+            saveAnnouncementConfig(config); // Create default config
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(ANNOUNCEMENT_CONFIG_FILE)) {
+            AnnouncementData.Config config = GSON.fromJson(reader, AnnouncementData.Config.class);
+            return config != null ? config : new AnnouncementData.Config();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new AnnouncementData.Config();
         }
     }
 }
