@@ -6,6 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.announcement.AnnouncementSchedule;
 import net.minecraft.commands.CommandSourceStack;
@@ -25,7 +26,7 @@ import java.util.List;
  *   /announce screen <text>
  *
  * Geplant (wie bei /restart schedule):
- *   /announce schedule add interval <minutes> <chat|screen> <name> <text>
+ *   /announce schedule add interval <hours> <minutes> <chat|screen> <name> <text>
  *   /announce schedule add time <hour> <minute> daily <chat|screen> <name> <text>
  *   /announce schedule add time <hour> <minute> weekly <weekday> <chat|screen> <name> <text>
  *   /announce schedule remove <name>
@@ -41,14 +42,17 @@ public class AnnouncementCommandHandler {
 
     private static final List<String> DISPLAY_SUGGESTIONS = List.of("chat", "screen");
 
-    private static final List<String> INTERVAL_SUGGESTIONS =
-            List.of("15", "30", "60", "180", "360", "720", "1440");
+    private static final List<Integer> INTERVAL_HOURS_SUGGESTIONS =
+            List.of(0, 1, 2, 3, 6, 12, 24);
 
-    private static final List<String> HOUR_SUGGESTIONS =
-            List.of("0", "6", "12", "18", "23");
+    private static final List<Integer> INTERVAL_MINUTES_SUGGESTIONS =
+            List.of(0, 15, 30, 45);
 
-    private static final List<String> MINUTE_SUGGESTIONS =
-            List.of("0", "15", "30", "45");
+    private static final List<Integer> HOUR_SUGGESTIONS =
+            List.of(0, 6, 12, 18, 23);
+
+    private static final List<Integer> MINUTE_SUGGESTIONS =
+            List.of(0, 15, 30, 45);
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildAnnounceTree() {
         return Commands.literal("announce")
@@ -122,21 +126,21 @@ public class AnnouncementCommandHandler {
         return Commands.literal("add")
 
                 .then(Commands.literal("interval")
-                        .then(Commands.argument("minutes", IntegerArgumentType.integer(1))
-                                .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(INTERVAL_SUGGESTIONS, builder))
-                                .then(displayNameMessage(AnnouncementCommandHandler::addInterval))
+                        .then(Commands.argument("hours", IntegerArgumentType.integer(0))
+                                .suggests(intSuggestions(INTERVAL_HOURS_SUGGESTIONS))
+                                .then(Commands.argument("minutes", IntegerArgumentType.integer(0, 59))
+                                        .suggests(intSuggestions(INTERVAL_MINUTES_SUGGESTIONS))
+                                        .then(displayNameMessage(AnnouncementCommandHandler::addInterval))
+                                )
                         )
                 )
 
                 .then(Commands.literal("time")
                         .then(Commands.argument("hour", IntegerArgumentType.integer(0, 23))
-                                .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(HOUR_SUGGESTIONS, builder))
+                                .suggests(intSuggestions(HOUR_SUGGESTIONS))
 
                                 .then(Commands.argument("minute", IntegerArgumentType.integer(0, 59))
-                                        .suggests((context, builder) ->
-                                                SharedSuggestionProvider.suggest(MINUTE_SUGGESTIONS, builder))
+                                        .suggests(intSuggestions(MINUTE_SUGGESTIONS))
 
                                         .then(Commands.literal("daily")
                                                 .then(displayNameMessage(AnnouncementCommandHandler::addDaily))
@@ -152,6 +156,24 @@ public class AnnouncementCommandHandler {
                                 )
                         )
                 );
+    }
+
+    /**
+     * Zahlen-Vorschläge, die numerisch statt alphabetisch sortiert werden
+     * (sonst kommt "1440" vor "15" und "180").
+     */
+    private static SuggestionProvider<CommandSourceStack> intSuggestions(List<Integer> values) {
+        return (context, builder) -> {
+            String typed = builder.getRemaining();
+
+            for (int value : values) {
+                if (String.valueOf(value).startsWith(typed)) {
+                    builder.suggest(value);
+                }
+            }
+
+            return builder.buildFuture();
+        };
     }
 
     /**
@@ -186,7 +208,17 @@ public class AnnouncementCommandHandler {
     }
 
     private static int addInterval(CommandContext<CommandSourceStack> ctx) {
+        int hours = IntegerArgumentType.getInteger(ctx, "hours");
         int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
+
+        long totalMinutes = hours * 60L + minutes;
+
+        if (totalMinutes < 1) {
+            ctx.getSource().sendFailure(
+                    Component.literal("§c✗ Interval must be at least 1 minute")
+            );
+            return 0;
+        }
 
         AnnouncementSchedule.Display display = readDisplay(ctx);
         if (display == null) {
@@ -197,7 +229,7 @@ public class AnnouncementCommandHandler {
         String message = AnnouncementManager.colorize(StringArgumentType.getString(ctx, "message"));
 
         AnnouncementSchedule schedule = AnnouncementManager.getInstance()
-                .addIntervalSchedule(minutes, display, name, message);
+                .addIntervalSchedule(totalMinutes, display, name, message);
 
         return reportAdded(ctx, schedule, name);
     }

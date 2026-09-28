@@ -194,7 +194,18 @@ public class AnnouncementManager {
 
     public String describeSchedule(AnnouncementSchedule schedule) {
         if (schedule.type == AnnouncementSchedule.Type.INTERVAL) {
-            return "every " + schedule.intervalMinutes + " minute(s)";
+            long hours = schedule.intervalMinutes / 60;
+            long minutes = schedule.intervalMinutes % 60;
+
+            if (hours == 0) {
+                return "every " + minutes + "m";
+            }
+
+            if (minutes == 0) {
+                return "every " + hours + "h";
+            }
+
+            return "every " + hours + "h " + minutes + "m";
         }
 
         String time = String.format("%02d:%02d", schedule.hour, schedule.minute);

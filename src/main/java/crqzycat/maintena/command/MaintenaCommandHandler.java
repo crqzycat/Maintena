@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
@@ -35,17 +36,38 @@ public class MaintenaCommandHandler {
             "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
     );
 
-    private static final List<String> INTERVAL_SUGGESTIONS =
-            List.of("15", "30", "60", "180", "360", "720", "1440");
+    private static final List<Integer> INTERVAL_HOURS_SUGGESTIONS =
+            List.of(0, 1, 2, 3, 6, 12, 24);
 
-    private static final List<String> MANUAL_MINUTES_SUGGESTIONS =
-            List.of("1", "5", "10", "15", "30", "60");
+    private static final List<Integer> INTERVAL_MINUTES_SUGGESTIONS =
+            List.of(0, 15, 30, 45);
 
-    private static final List<String> HOUR_SUGGESTIONS =
-            List.of("0", "6", "12", "18", "23");
+    private static final List<Integer> MANUAL_MINUTES_SUGGESTIONS =
+            List.of(1, 5, 10, 15, 30, 60);
 
-    private static final List<String> MINUTE_SUGGESTIONS =
-            List.of("0", "15", "30", "45");
+    private static final List<Integer> HOUR_SUGGESTIONS =
+            List.of(0, 6, 12, 18, 23);
+
+    private static final List<Integer> MINUTE_SUGGESTIONS =
+            List.of(0, 15, 30, 45);
+
+    /**
+     * Zahlen-Vorschläge, die numerisch statt alphabetisch sortiert werden
+     * (sonst kommt "1440" vor "15" und "180").
+     */
+    private static SuggestionProvider<CommandSourceStack> intSuggestions(List<Integer> values) {
+        return (context, builder) -> {
+            String typed = builder.getRemaining();
+
+            for (int value : values) {
+                if (String.valueOf(value).startsWith(typed)) {
+                    builder.suggest(value);
+                }
+            }
+
+            return builder.buildFuture();
+        };
+    }
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register(
@@ -111,8 +133,7 @@ public class MaintenaCommandHandler {
 
                 .then(Commands.literal("in")
                         .then(Commands.argument("minutes", IntegerArgumentType.integer(1))
-                                .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(MANUAL_MINUTES_SUGGESTIONS, builder))
+                                .suggests(intSuggestions(MANUAL_MINUTES_SUGGESTIONS))
                                 .executes(ctx -> {
                                     int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
 
@@ -203,25 +224,25 @@ public class MaintenaCommandHandler {
         return Commands.literal("add")
 
                 .then(Commands.literal("interval")
-                        .then(Commands.argument("minutes", IntegerArgumentType.integer(1))
-                                .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(INTERVAL_SUGGESTIONS, builder))
-                                .executes(ctx -> addInterval(ctx, null))
-                                .then(Commands.argument("name", StringArgumentType.word())
-                                        .executes(ctx -> addInterval(
-                                                ctx, StringArgumentType.getString(ctx, "name")))
+                        .then(Commands.argument("hours", IntegerArgumentType.integer(0))
+                                .suggests(intSuggestions(INTERVAL_HOURS_SUGGESTIONS))
+                                .then(Commands.argument("minutes", IntegerArgumentType.integer(0, 59))
+                                        .suggests(intSuggestions(INTERVAL_MINUTES_SUGGESTIONS))
+                                        .executes(ctx -> addInterval(ctx, null))
+                                        .then(Commands.argument("name", StringArgumentType.word())
+                                                .executes(ctx -> addInterval(
+                                                        ctx, StringArgumentType.getString(ctx, "name")))
+                                        )
                                 )
                         )
                 )
 
                 .then(Commands.literal("time")
                         .then(Commands.argument("hour", IntegerArgumentType.integer(0, 23))
-                                .suggests((context, builder) ->
-                                        SharedSuggestionProvider.suggest(HOUR_SUGGESTIONS, builder))
+                                .suggests(intSuggestions(HOUR_SUGGESTIONS))
 
                                 .then(Commands.argument("minute", IntegerArgumentType.integer(0, 59))
-                                        .suggests((context, builder) ->
-                                                SharedSuggestionProvider.suggest(MINUTE_SUGGESTIONS, builder))
+                                        .suggests(intSuggestions(MINUTE_SUGGESTIONS))
 
                                         .then(Commands.literal("daily")
                                                 .executes(ctx -> addDaily(ctx, null))
@@ -248,9 +269,19 @@ public class MaintenaCommandHandler {
     }
 
     private static int addInterval(CommandContext<CommandSourceStack> ctx, String name) {
+        int hours = IntegerArgumentType.getInteger(ctx, "hours");
         int minutes = IntegerArgumentType.getInteger(ctx, "minutes");
 
-        RestartSchedule schedule = RestartManager.getInstance().addIntervalSchedule(minutes, name);
+        long totalMinutes = hours * 60L + minutes;
+
+        if (totalMinutes < 1) {
+            ctx.getSource().sendFailure(
+                    Component.literal("§c✗ Interval must be at least 1 minute")
+            );
+            return 0;
+        }
+
+        RestartSchedule schedule = RestartManager.getInstance().addIntervalSchedule(totalMinutes, name);
 
         if (schedule == null) {
             ctx.getSource().sendFailure(
@@ -261,7 +292,8 @@ public class MaintenaCommandHandler {
 
         ctx.getSource().sendSuccess(
                 () -> Component.literal(
-                        "§a✓ Scheduled restart \"" + schedule.id + "\" added: every " + minutes + " minute(s)"
+                        "§a✓ Scheduled restart \"" + schedule.id + "\" added: "
+                                + RestartManager.getInstance().describeSchedule(schedule)
                 ),
                 true
         );
