@@ -6,6 +6,7 @@
   "mixins": [
     "MaintenaServerStatusMixin",
     "MaintenaPlayerListMixin",
+    "MaintenaClickActionMixin",
     "ServerCommonPacketListenerImplAccessor"
   ],
   "injectors": {

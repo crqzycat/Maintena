@@ -1,7 +1,5 @@
 package crqzycat.maintena.gui;
 
-import com.google.gson.JsonPrimitive;
-import com.mojang.serialization.JsonOps;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.ban.IpBanManager;
@@ -9,8 +7,9 @@ import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import net.minecraft.commands.CommandSourceStack;
-import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.dialog.ActionButton;
 import net.minecraft.server.dialog.CommonButtonData;
 import net.minecraft.server.dialog.CommonDialogData;
@@ -20,9 +19,7 @@ import net.minecraft.server.dialog.Input;
 import net.minecraft.server.dialog.MultiActionDialog;
 import net.minecraft.server.dialog.NoticeDialog;
 import net.minecraft.server.dialog.action.Action;
-import net.minecraft.server.dialog.action.CommandTemplate;
-import net.minecraft.server.dialog.action.ParsedTemplate;
-import net.minecraft.server.dialog.action.StaticAction;
+import net.minecraft.server.dialog.action.CustomAll;
 import net.minecraft.server.dialog.body.DialogBody;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.dialog.input.BooleanInput;
@@ -154,7 +151,7 @@ public final class SettingsGUI {
         return new Builder("§6Announcements")
                 .text(manager.getScheduleListText())
                 .text("§7Colors: &a, &c, ... On screen, \" | \" separates title and subtitle.")
-                .checkbox("display", "Show on screen (otherwise in chat)", false, "screen", "chat")
+                .dropdown("display", "Display", List.of("chat", "screen"))
                 .textInput("message", "Message", "", 256)
                 .dropdown("schedule", "Scheduled announcements", scheduleIds)
                 .button("Send now", "announce $(display) $(message)")
@@ -168,7 +165,7 @@ public final class SettingsGUI {
     private static Dialog announceAdd(CommandSourceStack a) {
         return new Builder("§6Add scheduled announcement")
                 .text("§7Interval: every X hours/minutes. Daily/weekly: at a fixed time (server time).")
-                .checkbox("display", "Show on screen (otherwise in chat)", false, "screen", "chat")
+                .dropdown("display", "Display", List.of("chat", "screen"))
                 .textInput("name", "Name (required, unique)", "announcement", 32)
                 .textInput("message", "Message", "", 256)
                 .textInput("hours", "Interval: hours", "1", 4)
@@ -248,21 +245,20 @@ public final class SettingsGUI {
         return new NoticeDialog(common, NoticeDialog.DEFAULT_ACTION);
     }
 
+    /**
+     * Jeder Button sendet eine "custom click action" an den Server (statt einen Befehl auf dem
+     * Client auszuführen). Dadurch zeigt Minecraft keine "Confirm Command Execution"-Warnung.
+     * Der Server (siehe SettingsGUIHandler#handleClick) setzt die $(key)-Platzhalter mit den
+     * Werten der Eingabefelder ein und führt den Befehl mit den Rechten des Spielers aus.
+     */
     private static ActionButton actionButton(String label, String command) {
-        Action action;
+        CompoundTag additions = new CompoundTag();
+        additions.putString(SettingsGUIHandler.COMMAND_KEY, command);
 
-        if (command.contains("$(")) {
-            // Befehl mit Platzhaltern aus den Eingabefeldern -> Template
-            ParsedTemplate template = ParsedTemplate.CODEC
-                    .parse(JsonOps.INSTANCE, new JsonPrimitive(command))
-                    .getOrThrow(error -> new IllegalStateException(
-                            "Invalid command template: " + command + " (" + error + ")"));
-
-            action = new CommandTemplate(template);
-        } else {
-            // Fester Befehl ohne Platzhalter -> normaler run_command Klick
-            action = new StaticAction(new ClickEvent.RunCommand(command));
-        }
+        Action action = new CustomAll(
+                Identifier.fromNamespaceAndPath("maintena", SettingsGUIHandler.ACTION_PATH),
+                Optional.of(additions)
+        );
 
         return new ActionButton(
                 new CommonButtonData(Component.literal(label), BUTTON_WIDTH),
