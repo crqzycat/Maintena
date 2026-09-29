@@ -28,7 +28,8 @@ import java.util.List;
  * "maintenance"-Baum (aus MaintenanceCommandHandler) unter /maintena maintenance
  * (der eigenständige /maintenance Befehl bleibt davon unberührt bestehen).
  * Ebenso der "announce"-Baum (AnnouncementCommandHandler) unter /maintena announce und als /announce.
- * Ebenso die Ban-Befehle (BanCommandHandler): /ban, /unban, /banlist und unter /maintena.
+ * Ebenso die Ban-Befehle (BanCommandHandler): /ban, /unban, /banlist, sowie die IP-Ban-Befehle
+ * (IpBanCommandHandler): /ip, /ipban, /ipunban, /ipbanlist. Alle auch unter /maintena.
  * Der bloße Aufruf von /restart bzw. /maintena restart (ohne Subcommand)
  * löst direkt einen sofortigen Restart aus (ehemals /restart now).
  */
@@ -112,6 +113,10 @@ public class MaintenaCommandHandler {
                         .then(BanCommandHandler.buildBanTree())
                         .then(BanCommandHandler.buildUnbanTree())
                         .then(BanCommandHandler.buildBanlistTree())
+                        .then(IpBanCommandHandler.buildIpTree())
+                        .then(IpBanCommandHandler.buildIpBanTree())
+                        .then(IpBanCommandHandler.buildIpUnbanTree())
+                        .then(IpBanCommandHandler.buildIpBanlistTree())
 
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                         .then(MaintenanceCommandHandler.buildMaintenanceCommand())
@@ -127,6 +132,12 @@ public class MaintenaCommandHandler {
         dispatcher.register(BanCommandHandler.buildBanTree());
         dispatcher.register(BanCommandHandler.buildUnbanTree());
         dispatcher.register(BanCommandHandler.buildBanlistTree());
+
+        // Eigenständige IP-Ban-Befehle, funktional identisch zu /maintena ip|ipban|ipunban|ipbanlist
+        dispatcher.register(IpBanCommandHandler.buildIpTree());
+        dispatcher.register(IpBanCommandHandler.buildIpBanTree());
+        dispatcher.register(IpBanCommandHandler.buildIpUnbanTree());
+        dispatcher.register(IpBanCommandHandler.buildIpBanlistTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

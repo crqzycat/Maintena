@@ -236,16 +236,23 @@ public class BanManager {
      * Die Restzeit ist zum Zeitpunkt des Aufrufs sekundengenau.
      */
     public Component buildBanScreen(UserBanListEntry entry) {
-        Date expires = entry.getExpires();
+        return buildBanScreen(entry.getReason(), entry.getSource(), entry.getCreated(), entry.getExpires());
+    }
+
+    /**
+     * Generische Variante, damit sowohl Name- als auch IP-Bans (IpBanManager) denselben
+     * Ban-Screen-Text aus der Config nutzen können.
+     */
+    public Component buildBanScreen(String reason, String source, Date created, Date expires) {
         String template = expires == null ? config.banScreenPermanent : config.banScreenTemporary;
 
-        String reason = entry.getReason() != null ? entry.getReason() : config.defaultReason;
-        String source = entry.getSource() != null ? entry.getSource() : "-";
+        String finalReason = reason != null ? reason : config.defaultReason;
+        String finalSource = source != null ? source : "-";
 
         String text = template
-                .replace("%reason%", reason)
-                .replace("%source%", source)
-                .replace("%created%", formatDate(entry.getCreated()))
+                .replace("%reason%", finalReason)
+                .replace("%source%", finalSource)
+                .replace("%created%", formatDate(created))
                 .replace("%expires%", formatDate(expires))
                 .replace("%remaining%", expires == null
                         ? "permanent"

@@ -45,8 +45,9 @@ public class BanCommandHandler {
     private static final List<Integer> DURATION_NUMBER_SUGGESTIONS = List.of(1, 7, 30);
 
     /**
-     * Entfernt die Vanilla-Befehle /ban und /banlist, damit unsere Versionen
+     * Entfernt die Vanilla-Befehle /ban, /banlist und /ban-ip, damit unsere Versionen
      * nicht mit ihnen zusammengeführt werden (Brigadier merged gleichnamige Knoten).
+     * /pardon und /pardon-ip bleiben unverändert bestehen.
      */
     @SuppressWarnings("unchecked")
     public static void removeVanillaCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -60,7 +61,7 @@ public class BanCommandHandler {
             Map<String, ?> childMap = (Map<String, ?>) children.get(root);
             Map<String, ?> literalMap = (Map<String, ?>) literals.get(root);
 
-            for (String name : new String[]{"ban", "banlist"}) {
+            for (String name : new String[]{"ban", "banlist", "ban-ip"}) {
                 childMap.remove(name);
                 literalMap.remove(name);
             }
