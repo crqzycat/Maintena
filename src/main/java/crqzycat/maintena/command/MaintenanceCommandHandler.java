@@ -114,7 +114,7 @@ public class MaintenanceCommandHandler {
 
                                                     java.util.Collection<String> candidates =
                                                             new java.util.ArrayList<>(
-                                                                    manager.getAllPlayerNames()
+                                                                    crqzycat.maintena.util.PlayerNames.known()
                                                             );
                                                     candidates.removeAll(
                                                             manager.getWhitelistedPlayers()

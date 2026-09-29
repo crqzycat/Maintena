@@ -8,6 +8,7 @@ import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
+import crqzycat.maintena.util.PlayerNames;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -84,6 +85,9 @@ public final class SettingsGUI {
             case IPBAN_ENTRY -> ipBanEntry(a, arg);
             case IP_ONLINE -> ipOnline(a);
             case IP_PLAYER -> ipPlayer(arg);
+            case PLAYER_SEARCH, PLAYER_LOOKUP -> playerSearch(a, arg);
+            case PLAYER_LOOKUP_RESULT -> playerLookupResult(arg);
+            case BAN_PLAYER -> banPlayer(arg);
         };
     }
 
@@ -135,7 +139,8 @@ public final class SettingsGUI {
             b.open(player, Page.MAINTENANCE_PLAYER, player);
         }
 
-        return b.button("Add to whitelist", "maintenance add $(addplayer)")
+        return b.open("Find player ...", Page.PLAYER_SEARCH, "WHITELIST:")
+                .button("Add to whitelist", "maintenance add $(addplayer)")
                 .buttonIf(!players.isEmpty(), "Clear whitelist", "maintenance clear")
                 .back(Page.MAINTENANCE)
                 .build();
@@ -315,6 +320,7 @@ public final class SettingsGUI {
                 .textInput("reason", "Reason (optional)", "", 128)
                 .button("Ban permanently", "ban $(player) $(reason)")
                 .button("Ban temporarily", "ban $(player) $(duration) $(reason)")
+                .open("Find player ...", Page.PLAYER_SEARCH, "BAN:")
                 .open("Banned players (" + count + ")", Page.BAN_LIST)
                 .button("Show ban list", "banlist")
                 .back(Page.MAIN)
@@ -373,6 +379,7 @@ public final class SettingsGUI {
                 .textInput("reason", "Reason (optional)", "", 128)
                 .button("IP ban permanently", "ipban $(target) $(reason)")
                 .button("IP ban temporarily", "ipban $(target) $(duration) $(reason)")
+                .open("Find player ...", Page.PLAYER_SEARCH, "IPBAN:")
                 .open("Banned IPs (" + count + ")", Page.IPBAN_LIST)
                 .open("Online players", Page.IP_ONLINE)
                 .button("Show IP ban list", "ipbanlist")
@@ -442,6 +449,100 @@ public final class SettingsGUI {
                 .button("IP ban permanently", "ipban " + name + " $(reason)")
                 .button("IP ban temporarily", "ipban " + name + " $(duration) $(reason)")
                 .back(Page.IP_ONLINE)
+                .build();
+    }
+
+    // ==================== Spielersuche ====================
+
+    private static Page searchOrigin(String mode) {
+        return switch (mode) {
+            case "WHITELIST" -> Page.MAINTENANCE_WHITELIST;
+            case "BAN" -> Page.BAN;
+            case "IPBAN" -> Page.IP_BAN;
+            default -> null;
+        };
+    }
+
+    /**
+     * Suche in allen bekannten Spielern (online + jeder, der schon mal auf dem Server war).
+     * Ein Klick auf einen Namen wählt ihn: Whitelist = sofort hinzufügen, Bans = Ban-Seite.
+     * Für Namen, die nie auf dem Server waren, gibt es die Mojang-Abfrage.
+     *
+     * @param arg MODUS:Suchtext, MODUS = WHITELIST, BAN oder IPBAN
+     */
+    private static Dialog playerSearch(CommandSourceStack a, String arg) {
+        String[] parts = (arg == null ? "" : arg).split(":", 2);
+        String mode = parts[0];
+        String query = parts.length > 1 ? parts[1] : "";
+        Page origin = searchOrigin(mode);
+
+        if (origin == null) {
+            return main();
+        }
+
+        PlayerNames.SearchResult result = PlayerNames.search(a.getOnlinePlayerNames(), query, 24);
+
+        Builder b = new Builder("§6Find player", Page.PLAYER_SEARCH, arg)
+                .text("§7Type a name or part of it. Online players are listed first.")
+                .textInput("search", "Player name", query, 16)
+                .open("Search", Page.PLAYER_SEARCH, mode + ":$(search)");
+
+        if (result.total() == 0) {
+            b.text("§7No known player matches.");
+        } else if (result.total() > result.names().size()) {
+            b.text("§7Showing " + result.names().size() + " of " + result.total()
+                    + " players. Type more letters to narrow it down.");
+        }
+
+        for (String name : result.names()) {
+            switch (mode) {
+                case "WHITELIST" -> b.buttonThen(name, "maintenance add " + name,
+                        Page.MAINTENANCE_WHITELIST, null);
+                case "BAN" -> b.open(name, Page.BAN_PLAYER, name);
+                default -> b.open(name, Page.IP_PLAYER, name);
+            }
+        }
+
+        boolean exactKnown = result.names().stream().anyMatch(name -> name.equalsIgnoreCase(query));
+
+        if (PlayerNames.isValidName(query) && !exactKnown) {
+            b.open("Check \"" + query + "\" at Mojang", Page.PLAYER_LOOKUP, mode + ":" + query);
+        }
+
+        return b.back(origin).build();
+    }
+
+    private static Dialog playerLookupResult(String arg) {
+        String[] parts = (arg == null ? "" : arg).split(":", 3);
+
+        if (parts.length < 3 || searchOrigin(parts[0]) == null) {
+            return main();
+        }
+
+        String mode = parts[0];
+        String name = parts[1];
+        boolean error = parts[2].equals("error");
+
+        Builder b = new Builder("§6Find player", Page.PLAYER_LOOKUP_RESULT, arg)
+                .text(error
+                        ? "§cCould not reach Mojang. Please try again later."
+                        : "§cNo Minecraft account named \"" + name + "\" exists.");
+
+        if (error) {
+            b.open("Try again", Page.PLAYER_LOOKUP, mode + ":" + name);
+        }
+
+        return b.back(Page.PLAYER_SEARCH, mode + ":" + name).build();
+    }
+
+    private static Dialog banPlayer(String name) {
+        return new Builder("§6Ban " + name, Page.BAN_PLAYER, name)
+                .text("§7Duration examples: 30m, 24h, 7d, 1d12h")
+                .textInput("duration", "Duration (temporary ban)", "1d", 16)
+                .textInput("reason", "Reason (optional)", "", 128)
+                .buttonThen("Ban permanently", "ban " + name + " $(reason)", Page.BAN, null)
+                .buttonThen("Ban temporarily", "ban " + name + " $(duration) $(reason)", Page.BAN, null)
+                .back(Page.PLAYER_SEARCH, "BAN:")
                 .build();
     }
 
@@ -571,7 +672,11 @@ public final class SettingsGUI {
         }
 
         Builder back(Page previous) {
-            exit = actionButton("« Back", null, previous, null);
+            return back(previous, null);
+        }
+
+        Builder back(Page previous, String previousArg) {
+            exit = actionButton("« Back", null, previous, previousArg);
             return this;
         }
 

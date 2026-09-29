@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PlayerNames;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -279,7 +280,7 @@ public class BanCommandHandler {
             CommandContext<CommandSourceStack> ctx,
             SuggestionsBuilder builder
     ) {
-        return SharedSuggestionProvider.suggest(ctx.getSource().getOnlinePlayerNames(), builder);
+        return SharedSuggestionProvider.suggest(PlayerNames.known(), builder);
     }
 
     private static CompletableFuture<Suggestions> suggestBannedNames(
