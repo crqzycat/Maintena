@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.CommandNode;
@@ -115,7 +116,7 @@ public class BanCommandHandler {
 
     // ==================== Ausführung ====================
 
-    private static int ban(CommandContext<CommandSourceStack> ctx, String details) {
+    private static int ban(CommandContext<CommandSourceStack> ctx, String details) throws CommandSyntaxException {
         CommandSourceStack source = ctx.getSource();
         MinecraftServer server = source.getServer();
 
