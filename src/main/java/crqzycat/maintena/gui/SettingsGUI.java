@@ -9,6 +9,7 @@ import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.dialog.ActionButton;
 import net.minecraft.server.dialog.CommonButtonData;
@@ -21,6 +22,7 @@ import net.minecraft.server.dialog.NoticeDialog;
 import net.minecraft.server.dialog.action.Action;
 import net.minecraft.server.dialog.action.CommandTemplate;
 import net.minecraft.server.dialog.action.ParsedTemplate;
+import net.minecraft.server.dialog.action.StaticAction;
 import net.minecraft.server.dialog.body.DialogBody;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.dialog.input.BooleanInput;
@@ -247,14 +249,24 @@ public final class SettingsGUI {
     }
 
     private static ActionButton actionButton(String label, String command) {
-        ParsedTemplate template = ParsedTemplate.CODEC
-                .parse(JsonOps.INSTANCE, new JsonPrimitive(command))
-                .result()
-                .orElseThrow(() -> new IllegalStateException("Invalid command template: " + command));
+        Action action;
+
+        if (command.contains("$(")) {
+            // Befehl mit Platzhaltern aus den Eingabefeldern -> Template
+            ParsedTemplate template = ParsedTemplate.CODEC
+                    .parse(JsonOps.INSTANCE, new JsonPrimitive(command))
+                    .getOrThrow(error -> new IllegalStateException(
+                            "Invalid command template: " + command + " (" + error + ")"));
+
+            action = new CommandTemplate(template);
+        } else {
+            // Fester Befehl ohne Platzhalter -> normaler run_command Klick
+            action = new StaticAction(new ClickEvent.RunCommand(command));
+        }
 
         return new ActionButton(
                 new CommonButtonData(Component.literal(label), BUTTON_WIDTH),
-                Optional.<Action>of(new CommandTemplate(template))
+                Optional.of(action)
         );
     }
 
