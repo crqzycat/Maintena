@@ -84,6 +84,7 @@ public class BanCommandHandler {
                 )
 
                 .then(Commands.argument("player", GameProfileArgument.gameProfile())
+                        .suggests(BanCommandHandler::suggestPlayerNames)
                         .executes(ctx -> ban(ctx, ""))
                         .then(Commands.argument("details", StringArgumentType.greedyString())
                                 .suggests(BanCommandHandler::suggestDuration)
@@ -272,6 +273,13 @@ public class BanCommandHandler {
     }
 
     // ==================== Vorschläge ====================
+
+    private static CompletableFuture<Suggestions> suggestPlayerNames(
+            CommandContext<CommandSourceStack> ctx,
+            SuggestionsBuilder builder
+    ) {
+        return SharedSuggestionProvider.suggest(ctx.getSource().getOnlinePlayerNames(), builder);
+    }
 
     private static CompletableFuture<Suggestions> suggestBannedNames(
             CommandContext<CommandSourceStack> ctx,
