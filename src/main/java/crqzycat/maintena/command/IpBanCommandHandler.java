@@ -102,7 +102,7 @@ public class IpBanCommandHandler {
             return 0;
         }
 
-        String ip = server.getPlayerList().getIpAddress(player);
+        String ip = IpBanManager.getIpAddress(player);
 
         ctx.getSource().sendSuccess(
                 () -> Component.literal("§6" + name + "§7's IP address: §f" + ip),

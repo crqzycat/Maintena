@@ -6,6 +6,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.IpBanList;
 import net.minecraft.server.players.IpBanListEntry;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
@@ -40,6 +42,20 @@ public class IpBanManager {
     }
 
     /**
+     * Liest die aktuelle IP-Adresse eines online Spielers direkt aus seiner Verbindung aus,
+     * da PlayerList in dieser Version keine öffentliche Hilfsmethode dafür anbietet.
+     */
+    public static String getIpAddress(ServerPlayer player) {
+        SocketAddress address = player.connection.getConnection().getRemoteAddress();
+
+        if (address instanceof InetSocketAddress inet && inet.getAddress() != null) {
+            return inet.getAddress().getHostAddress();
+        }
+
+        return address.toString();
+    }
+
+    /**
      * Ermittelt die IP eines Ziels: entweder eine direkt angegebene IP-Adresse,
      * oder der aktuell verbundene Spieler mit diesem Namen.
      */
@@ -49,7 +65,7 @@ public class IpBanManager {
         }
 
         ServerPlayer player = server.getPlayerList().getPlayerByName(target);
-        return player != null ? server.getPlayerList().getIpAddress(player) : null;
+        return player != null ? getIpAddress(player) : null;
     }
 
     public static boolean isExpired(IpBanListEntry entry) {
@@ -80,7 +96,7 @@ public class IpBanManager {
         Component screen = BanManager.getInstance().buildBanScreen(finalReason, source, created, expires);
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (ip.equals(server.getPlayerList().getIpAddress(player))) {
+            if (ip.equals(getIpAddress(player))) {
                 player.connection.disconnect(screen);
             }
         }
