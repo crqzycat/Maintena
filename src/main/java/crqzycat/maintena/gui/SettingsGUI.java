@@ -5,11 +5,10 @@ import com.mojang.serialization.JsonOps;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.ban.IpBanManager;
-import crqzycat.maintena.gui.SettingsGUIHandler.Access;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
-import crqzycat.maintena.gui.SettingsGUIHandler.Section;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.dialog.ActionButton;
 import net.minecraft.server.dialog.CommonButtonData;
@@ -39,7 +38,7 @@ import java.util.Optional;
  * (z.B. "maintenance on $(minutes)"), die Werte der Eingabefelder werden über $(key) eingesetzt.
  * Dadurch gelten immer die echten Rechte-Prüfungen der Befehle.
  *
- * Welche Bereiche/Buttons überhaupt vorkommen, entscheidet SettingsGUIHandler.Access.
+ * Das Menü ist nur für Admins gedacht und wird über /maintena geöffnet (siehe SettingsGUIHandler).
  */
 public final class SettingsGUI {
 
@@ -56,7 +55,7 @@ public final class SettingsGUI {
 
     // ==================== Einstieg ====================
 
-    public static Dialog build(Page page, Access a) {
+    public static Dialog build(Page page, CommandSourceStack a) {
         return switch (page) {
             case MAIN -> main(a);
             case MAINTENANCE -> maintenance(a);
@@ -75,24 +74,19 @@ public final class SettingsGUI {
 
     // ==================== Seiten ====================
 
-    private static Dialog main(Access a) {
-        Builder b = new Builder("§6Maintena Settings");
-
-        b.text(a.isAdmin()
-                ? "§7Access level: §aAdmin"
-                : "§7Access level: §eLimited §7(only your permitted areas are shown)");
-
-        b.buttonIf(Section.MAINTENANCE.isVisibleFor(a), "Maintenance", "settingsgui maintenance");
-        b.buttonIf(Section.RESTART.isVisibleFor(a), "Restart", "settingsgui restart");
-        b.buttonIf(Section.ANNOUNCE.isVisibleFor(a), "Announcements", "settingsgui announce");
-        b.buttonIf(Section.BAN.isVisibleFor(a), "Bans", "settingsgui ban");
-        b.buttonIf(Section.IP_BAN.isVisibleFor(a), "IP bans", "settingsgui ipban");
-        b.buttonIf(a.can("maintena", "reload"), "Reload config", "maintena reload");
-
-        return b.build();
+    private static Dialog main(CommandSourceStack a) {
+        return new Builder("§6Maintena Settings")
+                .text("§7Choose an area to configure.")
+                .button("Maintenance", "maintena maintenance")
+                .button("Restart", "maintena restart")
+                .button("Announcements", "maintena announce")
+                .button("Bans", "maintena ban")
+                .button("IP bans", "maintena ipban")
+                .button("Reload config", "maintena reload")
+                .build();
     }
 
-    private static Dialog maintenance(Access a) {
+    private static Dialog maintenance(CommandSourceStack a) {
         MaintenanceManager manager = MaintenanceManager.getInstance();
         Collection<String> whitelist = manager.getWhitelistedPlayers();
         boolean hasWhitelist = !whitelist.isEmpty();
@@ -112,7 +106,7 @@ public final class SettingsGUI {
                 .build();
     }
 
-    private static Dialog restart(Access a) {
+    private static Dialog restart(CommandSourceStack a) {
         RestartManager manager = RestartManager.getInstance();
 
         List<String> scheduleIds = manager.getSchedules().stream().map(s -> s.id).toList();
@@ -127,14 +121,14 @@ public final class SettingsGUI {
                 .button("Restart now", "restart")
                 .button("Restart in X minutes", "restart in $(minutes)")
                 .button("Cancel pending restart", "restart cancel")
-                .button("Add schedule ...", "settingsgui restart_add")
+                .button("Add schedule ...", "maintena restart schedule add")
                 .buttonIf(!scheduleIds.isEmpty(), "Remove selected schedule", "restart schedule remove $(schedule)")
                 .button("List schedules", "restart schedule list")
                 .back()
                 .build();
     }
 
-    private static Dialog restartAdd(Access a) {
+    private static Dialog restartAdd(CommandSourceStack a) {
         return new Builder("§6Add scheduled restart")
                 .text("§7Interval: every X hours/minutes. Daily/weekly: at a fixed time (server time).")
                 .textInput("name", "Name (required, unique)", "restart", 32)
@@ -146,11 +140,11 @@ public final class SettingsGUI {
                 .button("Add interval", "restart schedule add interval $(hours) $(minutes) $(name)")
                 .button("Add daily", "restart schedule add time $(hour) $(minute) daily $(name)")
                 .button("Add weekly", "restart schedule add time $(hour) $(minute) weekly $(weekday) $(name)")
-                .backTo("settingsgui restart")
+                .backTo("maintena restart")
                 .build();
     }
 
-    private static Dialog announce(Access a) {
+    private static Dialog announce(CommandSourceStack a) {
         AnnouncementManager manager = AnnouncementManager.getInstance();
 
         List<String> scheduleIds = manager.getSchedules().stream().map(s -> s.id).toList();
@@ -162,14 +156,14 @@ public final class SettingsGUI {
                 .textInput("message", "Message", "", 256)
                 .dropdown("schedule", "Scheduled announcements", scheduleIds)
                 .button("Send now", "announce $(display) $(message)")
-                .button("Add schedule ...", "settingsgui announce_add")
+                .button("Add schedule ...", "maintena announce schedule add")
                 .buttonIf(!scheduleIds.isEmpty(), "Remove selected schedule", "announce schedule remove $(schedule)")
                 .button("List schedules", "announce schedule list")
                 .back()
                 .build();
     }
 
-    private static Dialog announceAdd(Access a) {
+    private static Dialog announceAdd(CommandSourceStack a) {
         return new Builder("§6Add scheduled announcement")
                 .text("§7Interval: every X hours/minutes. Daily/weekly: at a fixed time (server time).")
                 .checkbox("display", "Show on screen (otherwise in chat)", false, "screen", "chat")
@@ -186,12 +180,12 @@ public final class SettingsGUI {
                         "announce schedule add time $(hour) $(minute) daily $(display) $(name) $(message)")
                 .button("Add weekly",
                         "announce schedule add time $(hour) $(minute) weekly $(weekday) $(display) $(name) $(message)")
-                .backTo("settingsgui announce")
+                .backTo("maintena announce")
                 .build();
     }
 
-    private static Dialog ban(Access a) {
-        List<String> banned = BanManager.getInstance().getActiveBans(a.server())
+    private static Dialog ban(CommandSourceStack a) {
+        List<String> banned = BanManager.getInstance().getActiveBans(a.getServer())
                 .stream()
                 .map(entry -> entry.getUser().name())
                 .toList();
@@ -202,22 +196,22 @@ public final class SettingsGUI {
                 .textInput("duration", "Duration (temporary ban)", "1d", 16)
                 .textInput("reason", "Reason (optional)", "", 128)
                 .dropdown("banned", "Banned players", banned)
-                .buttonIf(a.can("ban"), "Ban permanently", "ban $(player) $(reason)")
-                .buttonIf(a.can("ban"), "Ban temporarily", "ban $(player) $(duration) $(reason)")
-                .buttonIf(a.can("ban") && !banned.isEmpty(), "Ban info", "ban info $(banned)")
-                .buttonIf(a.can("unban") && !banned.isEmpty(), "Unban selected", "unban $(banned)")
-                .buttonIf(a.can("banlist"), "Show ban list", "banlist")
+                .button("Ban permanently", "ban $(player) $(reason)")
+                .button("Ban temporarily", "ban $(player) $(duration) $(reason)")
+                .buttonIf(!banned.isEmpty(), "Ban info", "ban info $(banned)")
+                .buttonIf(!banned.isEmpty(), "Unban selected", "unban $(banned)")
+                .button("Show ban list", "banlist")
                 .back()
                 .build();
     }
 
-    private static Dialog ipBan(Access a) {
-        List<String> bannedIps = IpBanManager.getInstance().getActiveBans(a.server())
+    private static Dialog ipBan(CommandSourceStack a) {
+        List<String> bannedIps = IpBanManager.getInstance().getActiveBans(a.getServer())
                 .stream()
                 .map(IpBanListEntry::getUser)
                 .toList();
 
-        Collection<String> online = a.source().getOnlinePlayerNames();
+        Collection<String> online = a.getOnlinePlayerNames();
 
         return new Builder("§6IP bans")
                 .text("§7Target: online player name or IP address. Duration examples: 30m, 24h, 7d")
@@ -226,12 +220,12 @@ public final class SettingsGUI {
                 .textInput("reason", "Reason (optional)", "", 128)
                 .dropdown("online", "Online players", online)
                 .dropdown("bannedip", "Banned IPs", bannedIps)
-                .buttonIf(a.can("ip"), "Show IP of player", "ip $(online)")
-                .buttonIf(a.can("ipban"), "IP ban permanently", "ipban $(target) $(reason)")
-                .buttonIf(a.can("ipban"), "IP ban temporarily", "ipban $(target) $(duration) $(reason)")
-                .buttonIf(a.can("ipban") && !bannedIps.isEmpty(), "IP ban info", "ipban info $(bannedip)")
-                .buttonIf(a.can("ipunban") && !bannedIps.isEmpty(), "Remove IP ban", "ipunban $(bannedip)")
-                .buttonIf(a.can("ipbanlist"), "Show IP ban list", "ipbanlist")
+                .button("Show IP of player", "ip $(online)")
+                .button("IP ban permanently", "ipban $(target) $(reason)")
+                .button("IP ban temporarily", "ipban $(target) $(duration) $(reason)")
+                .buttonIf(!bannedIps.isEmpty(), "IP ban info", "ipban info $(bannedip)")
+                .buttonIf(!bannedIps.isEmpty(), "Remove IP ban", "ipunban $(bannedip)")
+                .button("Show IP ban list", "ipbanlist")
                 .back()
                 .build();
     }
@@ -325,7 +319,7 @@ public final class SettingsGUI {
         }
 
         Builder back() {
-            return backTo("settingsgui");
+            return backTo("maintena");
         }
 
         Builder backTo(String command) {

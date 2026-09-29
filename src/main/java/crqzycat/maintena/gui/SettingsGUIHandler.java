@@ -1,151 +1,68 @@
 package crqzycat.maintena.gui;
 
-import com.mojang.brigadier.tree.CommandNode;
+import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.Holder;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * Entscheidet, welche Teile der Settings-GUI ein Spieler sehen darf, und öffnet sie.
+ * Oeffnet die Settings-GUI. Das Menue ist nur fuer Admins gedacht und wird ausschliesslich ueber
+ * /maintena geoeffnet:
  *
- * Die Rechte werden nicht doppelt gepflegt: Für jeden Command wird der echte Befehlsknoten
- * aus dem Dispatcher gefragt (CommandNode#canUse). Damit gilt automatisch dieselbe Regel wie
- * beim Tippen des Befehls (Admin/Gamemaster oder ein Permission-Mod, der die Befehle freigibt).
- * Die Befehle prüfen die Rechte beim Ausführen zusätzlich selbst, die GUI ist also nur eine
- * Ansicht und kein Sicherheitsrisiko.
+ *   /maintena               Hauptmenue
+ *   /maintena maintenance   Maintenance-Menue
+ *   /maintena restart       Restart-Menue
+ *   /maintena announce      Announcement-Menue
+ *   /maintena ban           Ban-Menue
+ *   /maintena ipban         IP-Ban-Menue
+ *
+ * Die Rechte-Pruefung macht der /maintena Befehl selbst (Gamemaster/OP), deshalb gibt es hier
+ * keine zweite Pruefung. Die Buttons im Dialog fuehren normale Befehle mit den Rechten des
+ * Spielers aus.
  */
 public final class SettingsGUIHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
 
     private SettingsGUIHandler() {
     }
 
-    // ==================== Bereiche ====================
-
-    /** Ein Bereich ist sichtbar, wenn mindestens einer seiner Befehle nutzbar ist. */
-    public enum Section {
-        MAINTENANCE("maintenance"),
-        RESTART("restart"),
-        ANNOUNCE("announce"),
-        BAN("ban", "unban", "banlist"),
-        IP_BAN("ip", "ipban", "ipunban", "ipbanlist");
-
-        private final String[] commands;
-
-        Section(String... commands) {
-            this.commands = commands;
-        }
-
-        public boolean isVisibleFor(Access access) {
-            for (String command : commands) {
-                if (access.can(command)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-    }
-
-    // ==================== Seiten ====================
-
     public enum Page {
-        MAIN("main", null),
-        MAINTENANCE("maintenance", Section.MAINTENANCE),
-        RESTART("restart", Section.RESTART),
-        RESTART_ADD("restart_add", Section.RESTART),
-        ANNOUNCE("announce", Section.ANNOUNCE),
-        ANNOUNCE_ADD("announce_add", Section.ANNOUNCE),
-        BAN("ban", Section.BAN),
-        IP_BAN("ipban", Section.IP_BAN);
-
-        public final String id;
-        public final Section section;
-
-        Page(String id, Section section) {
-            this.id = id;
-            this.section = section;
-        }
-
-        public static Page byId(String id) {
-            for (Page page : values()) {
-                if (page.id.equalsIgnoreCase(id)) {
-                    return page;
-                }
-            }
-            return null;
-        }
-
-        public boolean isAllowedFor(Access access) {
-            return section == null || section.isVisibleFor(access);
-        }
+        MAIN,
+        MAINTENANCE,
+        RESTART,
+        RESTART_ADD,
+        ANNOUNCE,
+        ANNOUNCE_ADD,
+        BAN,
+        IP_BAN
     }
 
-    // ==================== Rechte ====================
+    /** Fuer Brigadier: oeffnet die Seite fuer den ausfuehrenden Spieler. */
+    public static int open(CommandContext<CommandSourceStack> ctx, Page page) {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = source.getPlayer();
 
-    public static final class Access {
-
-        private final CommandSourceStack source;
-
-        public Access(CommandSourceStack source) {
-            this.source = source;
+        if (player == null) {
+            source.sendFailure(Component.literal("§c✗ This menu can only be opened by a player in-game"));
+            return 0;
         }
 
-        public CommandSourceStack source() {
-            return source;
+        try {
+            Dialog dialog = SettingsGUI.build(page, source);
+            player.openDialog(Holder.direct(dialog));
+            return 1;
+        } catch (Exception e) {
+            // Fehler nicht verschlucken: in die Konsole und zum Spieler
+            LOGGER.error("Could not open Maintena menu page {}", page, e);
+            source.sendFailure(Component.literal(
+                    "§c✗ Could not open the menu (" + page + "): " + e
+            ));
+            return 0;
         }
-
-        public MinecraftServer server() {
-            return source.getServer();
-        }
-
-        /** Darf der Spieler den Befehl (bzw. Unterbefehl-Pfad) ausführen? */
-        public boolean can(String... path) {
-            CommandNode<CommandSourceStack> node = server().getCommands().getDispatcher().getRoot();
-
-            for (String part : path) {
-                node = node.getChild(part);
-
-                if (node == null) {
-                    return false;
-                }
-            }
-
-            return node.canUse(source);
-        }
-
-        /** Admin = darf den globalen /maintena Befehl benutzen (Gamemaster oder höher). */
-        public boolean isAdmin() {
-            return can("maintena");
-        }
-
-        public boolean hasAnySection() {
-            for (Section section : Section.values()) {
-                if (section.isVisibleFor(this)) {
-                    return true;
-                }
-            }
-            return isAdmin();
-        }
-    }
-
-    // ==================== Öffnen ====================
-
-    public static void open(ServerPlayer player) {
-        open(player, Page.MAIN);
-    }
-
-    public static void open(ServerPlayer player, Page page) {
-        Access access = new Access(player.createCommandSourceStack());
-
-        Dialog dialog;
-
-        if (!access.hasAnySection() || !page.isAllowedFor(access)) {
-            dialog = SettingsGUI.noAccess();
-        } else {
-            dialog = SettingsGUI.build(page, access);
-        }
-
-        player.openDialog(Holder.direct(dialog));
     }
 }

@@ -8,6 +8,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.ban.BanManager;
+import crqzycat.maintena.gui.SettingsGUIHandler;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
@@ -30,8 +31,16 @@ import java.util.List;
  * Ebenso der "announce"-Baum (AnnouncementCommandHandler) unter /maintena announce und als /announce.
  * Ebenso die Ban-Befehle (BanCommandHandler): /ban, /unban, /banlist, sowie die IP-Ban-Befehle
  * (IpBanCommandHandler): /ip, /ipban, /ipunban, /ipbanlist. Alle auch unter /maintena.
- * Der bloße Aufruf von /restart bzw. /maintena restart (ohne Subcommand)
- * löst direkt einen sofortigen Restart aus (ehemals /restart now).
+ * Der bloße Aufruf von /restart (ohne Subcommand) löst direkt einen sofortigen Restart aus
+ * (ehemals /restart now).
+ *
+ * Die Settings-GUI (nur für Admins) öffnet sich über /maintena:
+ *   /maintena               Hauptmenü
+ *   /maintena maintenance   Maintenance-Menü
+ *   /maintena restart       Restart-Menü (der sofortige Restart ist dort ein Button bzw. /restart)
+ *   /maintena announce      Announcement-Menü
+ *   /maintena ban           Ban-Menü
+ *   /maintena ipban         IP-Ban-Menü
  */
 public class MaintenaCommandHandler {
 
@@ -87,6 +96,9 @@ public class MaintenaCommandHandler {
                         .requires(source -> source.permissions()
                                 .hasPermission(Permissions.COMMANDS_GAMEMASTER))
 
+                        // /maintena ohne Argumente -> Hauptmenü
+                        .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAIN))
+
                         .then(Commands.literal("reload")
                                 .executes(ctx -> {
                                     MaintenanceManager.getInstance().reload();
@@ -103,27 +115,30 @@ public class MaintenaCommandHandler {
                                 })
                         )
 
-                        // /maintena restart ... (identischer Baum wie das eigenständige /restart)
-                        .then(buildRestartTree())
+                        // /maintena restart ... (wie /restart, nur dass ohne Argumente das Menü aufgeht)
+                        .then(buildRestartTree(true))
 
                         // /maintena announce ... (identischer Baum wie das eigenständige /announce)
-                        .then(AnnouncementCommandHandler.buildAnnounceTree())
+                        .then(AnnouncementCommandHandler.buildAnnounceTree(true))
 
                         // /maintena ban|unban|banlist ... (identisch zu den eigenständigen Befehlen)
-                        .then(BanCommandHandler.buildBanTree())
+                        .then(BanCommandHandler.buildBanTree()
+                                .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.BAN)))
                         .then(BanCommandHandler.buildUnbanTree())
                         .then(BanCommandHandler.buildBanlistTree())
                         .then(IpBanCommandHandler.buildIpTree())
-                        .then(IpBanCommandHandler.buildIpBanTree())
+                        .then(IpBanCommandHandler.buildIpBanTree()
+                                .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.IP_BAN)))
                         .then(IpBanCommandHandler.buildIpUnbanTree())
                         .then(IpBanCommandHandler.buildIpBanlistTree())
 
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
-                        .then(MaintenanceCommandHandler.buildMaintenanceCommand())
+                        .then(MaintenanceCommandHandler.buildMaintenanceCommand()
+                                .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE)))
         );
 
         // Eigenständiger /restart Befehl, funktional identisch zu /maintena restart
-        dispatcher.register(buildRestartTree());
+        dispatcher.register(buildRestartTree(false));
 
         // Eigenständiger /announce Befehl, funktional identisch zu /maintena announce
         dispatcher.register(AnnouncementCommandHandler.buildAnnounceTree());
@@ -142,8 +157,12 @@ public class MaintenaCommandHandler {
 
     // ==================== /maintena restart  &  /restart ====================
 
-    private static LiteralArgumentBuilder<CommandSourceStack> buildRestartTree() {
-        return Commands.literal("restart")
+    /**
+     * @param menu true = Variante für /maintena restart: ohne Argumente öffnet sich das Restart-Menü
+     *             (statt sofort neu zu starten), "schedule add" ohne Argumente das Formular für Zeitpläne.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> buildRestartTree(boolean menu) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("restart")
                 .requires(source -> source.permissions()
                         .hasPermission(Permissions.COMMANDS_GAMEMASTER))
 
@@ -198,7 +217,10 @@ public class MaintenaCommandHandler {
                 )
 
                 .then(Commands.literal("schedule")
-                        .then(buildScheduleAddTree())
+                        .then(menu
+                                ? buildScheduleAddTree().executes(
+                                        ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.RESTART_ADD))
+                                : buildScheduleAddTree())
 
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("name", StringArgumentType.word())
@@ -245,6 +267,12 @@ public class MaintenaCommandHandler {
                                 })
                         )
                 );
+
+        if (menu) {
+            root.executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.RESTART));
+        }
+
+        return root;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> buildScheduleAddTree() {

@@ -9,6 +9,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.announcement.AnnouncementSchedule;
+import crqzycat.maintena.gui.SettingsGUIHandler;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -55,7 +56,15 @@ public class AnnouncementCommandHandler {
             List.of(0, 15, 30, 45);
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildAnnounceTree() {
-        return Commands.literal("announce")
+        return buildAnnounceTree(false);
+    }
+
+    /**
+     * @param menu true = Variante für /maintena announce: ohne Argumente öffnet sich das
+     *             Announcement-Menü, "schedule add" ohne Argumente das Formular für neue Zeitpläne.
+     */
+    public static LiteralArgumentBuilder<CommandSourceStack> buildAnnounceTree(boolean menu) {
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("announce")
                 .requires(source -> source.permissions()
                         .hasPermission(Permissions.COMMANDS_GAMEMASTER))
 
@@ -73,7 +82,10 @@ public class AnnouncementCommandHandler {
 
                 // Geplante Announcements
                 .then(Commands.literal("schedule")
-                        .then(buildScheduleAddTree())
+                        .then(menu
+                                ? buildScheduleAddTree().executes(
+                                        ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.ANNOUNCE_ADD))
+                                : buildScheduleAddTree())
 
                         .then(Commands.literal("remove")
                                 .then(Commands.argument("name", StringArgumentType.word())
@@ -120,6 +132,12 @@ public class AnnouncementCommandHandler {
                                 })
                         )
                 );
+
+        if (menu) {
+            root.executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.ANNOUNCE));
+        }
+
+        return root;
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> buildScheduleAddTree() {
