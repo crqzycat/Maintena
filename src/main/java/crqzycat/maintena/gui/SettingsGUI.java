@@ -10,7 +10,6 @@ import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.dialog.ActionButton;
@@ -23,7 +22,6 @@ import net.minecraft.server.dialog.MultiActionDialog;
 import net.minecraft.server.dialog.NoticeDialog;
 import net.minecraft.server.dialog.action.Action;
 import net.minecraft.server.dialog.action.CustomAll;
-import net.minecraft.server.dialog.action.StaticAction;
 import net.minecraft.server.dialog.body.DialogBody;
 import net.minecraft.server.dialog.body.PlainMessage;
 import net.minecraft.server.dialog.input.SingleOptionInput;
@@ -131,7 +129,6 @@ public final class SettingsGUI {
                 .text(players.isEmpty()
                         ? "§7No players are whitelisted."
                         : "§7Click a player to manage them.")
-                .text("§8Tip: \"Add player (name suggestions)\" opens the chat with all known players suggested.")
                 .textInput("addplayer", "Add player", "", 16);
 
         for (String player : players) {
@@ -139,7 +136,6 @@ public final class SettingsGUI {
         }
 
         return b.button("Add to whitelist", "maintenance add $(addplayer)")
-                .suggest("Add player (name suggestions)", "/maintenance add ")
                 .buttonIf(!players.isEmpty(), "Clear whitelist", "maintenance clear")
                 .back(Page.MAINTENANCE)
                 .build();
@@ -314,14 +310,11 @@ public final class SettingsGUI {
 
         return new Builder("§6Bans", Page.BAN, null)
                 .text("§7Duration examples: 30m, 24h, 7d, 1d12h")
-                .text("§8Tip: the \"name suggestions\" buttons open the chat and suggest names while you type.")
                 .textInput("player", "Player name", "", 16)
                 .textInput("duration", "Duration (temporary ban)", "1d", 16)
                 .textInput("reason", "Reason (optional)", "", 128)
                 .button("Ban permanently", "ban $(player) $(reason)")
                 .button("Ban temporarily", "ban $(player) $(duration) $(reason)")
-                .suggest("Ban player (name suggestions)", "/ban ")
-                .suggest("Unban player (name suggestions)", "/unban ")
                 .open("Banned players (" + count + ")", Page.BAN_LIST)
                 .button("Show ban list", "banlist")
                 .back(Page.MAIN)
@@ -380,7 +373,6 @@ public final class SettingsGUI {
                 .textInput("reason", "Reason (optional)", "", 128)
                 .button("IP ban permanently", "ipban $(target) $(reason)")
                 .button("IP ban temporarily", "ipban $(target) $(duration) $(reason)")
-                .suggest("IP ban player (name suggestions)", "/ipban ")
                 .open("Banned IPs (" + count + ")", Page.IPBAN_LIST)
                 .open("Online players", Page.IP_ONLINE)
                 .button("Show IP ban list", "ipbanlist")
@@ -501,17 +493,6 @@ public final class SettingsGUI {
         );
     }
 
-    /**
-     * Button, der den Chat mit einem vorausgefüllten Befehl öffnet. Dort schlägt Minecraft die
-     * Namen beim Tippen vor (aus den Vorschlägen des Befehls) und filtert sie nach den Buchstaben.
-     */
-    private static ActionButton suggestButton(String label, String command) {
-        return new ActionButton(
-                new CommonButtonData(Component.literal(label), BUTTON_WIDTH),
-                Optional.of(new StaticAction(new ClickEvent.SuggestCommand(command)))
-        );
-    }
-
     /** Kleiner Baukasten für Dialoge mit Text, Eingabefeldern und Buttons. */
     private static final class Builder {
 
@@ -576,12 +557,6 @@ public final class SettingsGUI {
         /** Führt den Befehl aus und öffnet danach eine andere Seite. */
         Builder buttonThen(String label, String command, Page next, String nextArg) {
             buttons.add(actionButton(label, command, next, nextArg));
-            return this;
-        }
-
-        /** Öffnet den Chat mit einem vorausgefüllten Befehl (Namensvorschläge beim Tippen). */
-        Builder suggest(String label, String command) {
-            buttons.add(suggestButton(label, command));
             return this;
         }
 
