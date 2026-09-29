@@ -6,8 +6,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import org.slf4j.Logger;
@@ -18,8 +18,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Oeffnet die Settings-GUI. Das Menue ist nur fuer Admins gedacht und wird ausschliesslich ueber
- * /maintena geoeffnet:
+ * Oeffnet die Settings-GUI und verarbeitet die Klicks auf ihre Buttons. Das Menue ist nur fuer
+ * Admins gedacht und wird ueber /maintena geoeffnet:
  *
  *   /maintena               Hauptmenue
  *   /maintena maintenance   Maintenance-Menue
@@ -28,22 +28,25 @@ import java.util.regex.Pattern;
  *   /maintena ban           Ban-Menue
  *   /maintena ipban         IP-Ban-Menue
  *
- * Die Rechte-Pruefung macht der /maintena Befehl selbst (Gamemaster/OP), deshalb gibt es hier
- * keine zweite Pruefung. Die Buttons im Dialog fuehren normale Befehle mit den Rechten des
- * Spielers aus.
+ * Die Rechte-Pruefung macht der /maintena Befehl selbst (Gamemaster/OP). Die Buttons senden eine
+ * custom click action; der Server fuehrt den Befehl mit den Rechten des Spielers aus.
  */
 public final class SettingsGUIHandler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
 
-    /** Id (ohne Namespace) der Custom-Click-Action aller Menü-Buttons: maintena:run */
+    /** Id (ohne Namespace) der Custom-Click-Action aller Menue-Buttons: maintena:run */
     public static final String ACTION_PATH = "run";
     public static final String ACTION_ID = "maintena:" + ACTION_PATH;
 
-    /** Schlüssel im Payload, unter dem der Befehl (mit $(key)-Platzhaltern) steht. */
-    public static final String COMMAND_KEY = "cmd";
+    /** Schluessel im Payload: Befehl (mit $(key)-Platzhaltern), optional. */
+    public static final String KEY_COMMAND = "mt_cmd";
+    /** Schluessel im Payload: Seite, die nach dem Befehl (bzw. direkt) geoeffnet wird. */
+    public static final String KEY_PAGE = "mt_page";
+    /** Schluessel im Payload: Parameter der Seite (z.B. Spielername), optional. */
+    public static final String KEY_ARG = "mt_arg";
 
-    /** Nur Befehle dieser Maintena-Bereiche dürfen über die Menü-Buttons laufen. */
+    /** Nur Befehle dieser Maintena-Bereiche duerfen ueber die Menue-Buttons laufen. */
     private static final Set<String> ALLOWED_ROOTS = Set.of(
             "maintena", "maintenance", "restart", "announce",
             "ban", "unban", "banlist", "ip", "ipban", "ipunban", "ipbanlist"
@@ -57,12 +60,24 @@ public final class SettingsGUIHandler {
     public enum Page {
         MAIN,
         MAINTENANCE,
+        MAINTENANCE_WHITELIST,
+        MAINTENANCE_PLAYER,
         RESTART,
+        RESTART_SCHEDULES,
+        RESTART_SCHEDULE,
         RESTART_ADD,
         ANNOUNCE,
+        ANNOUNCE_SCHEDULES,
+        ANNOUNCE_SCHEDULE,
         ANNOUNCE_ADD,
         BAN,
-        IP_BAN
+        BAN_LIST,
+        BAN_ENTRY,
+        IP_BAN,
+        IPBAN_LIST,
+        IPBAN_ENTRY,
+        IP_ONLINE,
+        IP_PLAYER
     }
 
     /** Fuer Brigadier: oeffnet die Seite fuer den ausfuehrenden Spieler. */
@@ -75,23 +90,27 @@ public final class SettingsGUIHandler {
             return 0;
         }
 
+        return show(source, player, page, null) ? 1 : 0;
+    }
+
+    private static boolean show(CommandSourceStack source, ServerPlayer player, Page page, String arg) {
         try {
-            Dialog dialog = SettingsGUI.build(page, source);
+            Dialog dialog = SettingsGUI.build(page, source, arg);
             player.openDialog(Holder.direct(dialog));
-            return 1;
+            return true;
         } catch (Exception e) {
             // Fehler nicht verschlucken: in die Konsole und zum Spieler
             LOGGER.error("Could not open Maintena menu page {}", page, e);
             source.sendFailure(Component.literal(
                     "§c✗ Could not open the menu (" + page + "): " + e
             ));
-            return 0;
+            return false;
         }
     }
 
     /**
-     * Wird vom Mixin aufgerufen, wenn ein Menü-Button geklickt wurde (custom click action).
-     * Läuft im Netzwerk-Thread, die Ausführung wird auf den Server-Thread verschoben.
+     * Wird vom Mixin aufgerufen, wenn ein Menue-Button geklickt wurde (custom click action).
+     * Laeuft im Netzwerk-Thread, die Ausfuehrung wird auf den Server-Thread verschoben.
      */
     public static void handleClick(ServerPlayer player, Tag payload) {
         if (!(payload instanceof CompoundTag compound)) {
@@ -103,28 +122,47 @@ public final class SettingsGUIHandler {
         server.execute(() -> {
             CommandSourceStack source = player.createCommandSourceStack();
 
-            // Das Menü ist nur für Admins; die Befehle prüfen die Rechte zusätzlich selbst.
+            // Das Menue ist nur fuer Admins; die Befehle pruefen die Rechte zusaetzlich selbst.
             if (!source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
                 return;
             }
 
-            String template = compound.getStringOr(COMMAND_KEY, "");
-            String command = fillPlaceholders(template, compound).strip();
+            String template = compound.getStringOr(KEY_COMMAND, "");
 
-            if (command.isEmpty()) {
-                return;
+            if (!template.isBlank()) {
+                String command = fillPlaceholders(template, compound).strip();
+                String root = command.split(" ", 2)[0];
+
+                if (!ALLOWED_ROOTS.contains(root)) {
+                    LOGGER.warn("Ignored menu action with unexpected command from {}: {}",
+                            player.getPlainTextName(), command);
+                    return;
+                }
+
+                server.getCommands().performPrefixedCommand(source, command);
             }
 
-            String root = command.split(" ", 2)[0];
+            // Danach die gewuenschte Seite oeffnen (aktualisiert die Anzeige bzw. navigiert)
+            Page page = parsePage(compound.getStringOr(KEY_PAGE, ""));
 
-            if (!ALLOWED_ROOTS.contains(root)) {
-                LOGGER.warn("Ignored menu action with unexpected command from {}: {}",
-                        player.getPlainTextName(), command);
-                return;
+            if (page != null) {
+                String arg = compound.getStringOr(KEY_ARG, "").replaceAll("\\s", "");
+
+                if (arg.length() > 64) {
+                    arg = arg.substring(0, 64);
+                }
+
+                show(source, player, page, arg.isEmpty() ? null : arg);
             }
-
-            server.getCommands().performPrefixedCommand(source, command);
         });
+    }
+
+    private static Page parsePage(String name) {
+        try {
+            return Page.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** Ersetzt $(key) durch den Text des gleichnamigen Eingabefelds (Steuerzeichen entfernt). */
