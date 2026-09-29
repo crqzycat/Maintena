@@ -7,6 +7,7 @@ import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.command.MaintenanceCommandHandler;
 import crqzycat.maintena.command.MaintenaCommandHandler;
+import crqzycat.maintena.command.SettingsGuiCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
 
 public class Maintena implements ModInitializer {
@@ -16,10 +17,11 @@ public class Maintena implements ModInitializer {
         // Register commands
         MaintenanceCommandHandler.register();
         MaintenaCommandHandler.register();
-        
+        SettingsGuiCommandHandler.register();
+
         // Register login event handler to kick non-whitelisted players
         LoginEventHandler.register();
-        
+
         // Initialize manager on server start
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             MaintenanceManager.getInstance().setServer(server);
