@@ -5,6 +5,7 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
 import crqzycat.maintena.announcement.AnnouncementData;
+import crqzycat.maintena.ban.BanConfig;
 import crqzycat.maintena.maintenance.MaintenanceData;
 import crqzycat.maintena.restart.RestartData;
 import net.fabricmc.loader.api.FabricLoader;
@@ -25,6 +26,7 @@ public class PersistenceUtil {
     private static final File RESTART_CONFIG_FILE = CONFIG_DIR.resolve("restart-config.json").toFile();
     private static final File ANNOUNCEMENT_DATA_FILE = CONFIG_DIR.resolve("announcements.json").toFile();
     private static final File ANNOUNCEMENT_CONFIG_FILE = CONFIG_DIR.resolve("announcement-config.json").toFile();
+    private static final File BAN_CONFIG_FILE = CONFIG_DIR.resolve("ban-config.json").toFile();
     
     static {
         try {
@@ -251,6 +253,38 @@ public class PersistenceUtil {
         } catch (IOException e) {
             e.printStackTrace();
             return new AnnouncementData.Config();
+        }
+    }
+
+    // ==================== Ban Config ====================
+
+    public static void saveBanConfig(BanConfig config) {
+        try {
+            if (!BAN_CONFIG_FILE.exists()) {
+                BAN_CONFIG_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(BAN_CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static BanConfig loadBanConfig() {
+        if (!BAN_CONFIG_FILE.exists()) {
+            BanConfig config = new BanConfig();
+            saveBanConfig(config); // Create default config
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(BAN_CONFIG_FILE)) {
+            BanConfig config = GSON.fromJson(reader, BanConfig.class);
+            return config != null ? config : new BanConfig();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new BanConfig();
         }
     }
 }

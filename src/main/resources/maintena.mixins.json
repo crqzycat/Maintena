@@ -4,7 +4,8 @@
   "package": "crqzycat.maintena.mixin",
   "compatibilityLevel": "JAVA_25",
   "mixins": [
-    "MaintenaServerStatusMixin"
+    "MaintenaServerStatusMixin",
+    "MaintenaPlayerListMixin"
   ],
   "injectors": {
     "defaultRequire": 1

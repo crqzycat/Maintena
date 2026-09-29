@@ -7,6 +7,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
+import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
@@ -27,6 +28,7 @@ import java.util.List;
  * "maintenance"-Baum (aus MaintenanceCommandHandler) unter /maintena maintenance
  * (der eigenständige /maintenance Befehl bleibt davon unberührt bestehen).
  * Ebenso der "announce"-Baum (AnnouncementCommandHandler) unter /maintena announce und als /announce.
+ * Ebenso die Ban-Befehle (BanCommandHandler): /ban, /unban, /banlist und unter /maintena.
  * Der bloße Aufruf von /restart bzw. /maintena restart (ohne Subcommand)
  * löst direkt einen sofortigen Restart aus (ehemals /restart now).
  */
@@ -76,6 +78,9 @@ public class MaintenaCommandHandler {
     }
 
     private static void registerMaintenaCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
+        // Vanilla /ban und /banlist durch die Maintena-Versionen ersetzen
+        BanCommandHandler.removeVanillaCommands(dispatcher);
+
         dispatcher.register(
                 Commands.literal("maintena")
                         .requires(source -> source.permissions()
@@ -86,6 +91,7 @@ public class MaintenaCommandHandler {
                                     MaintenanceManager.getInstance().reload();
                                     RestartManager.getInstance().reload();
                                     AnnouncementManager.getInstance().reload();
+                                    BanManager.getInstance().reload();
 
                                     ctx.getSource().sendSuccess(
                                             () -> Component.literal("§a✓ Maintena config reloaded"),
@@ -102,6 +108,11 @@ public class MaintenaCommandHandler {
                         // /maintena announce ... (identischer Baum wie das eigenständige /announce)
                         .then(AnnouncementCommandHandler.buildAnnounceTree())
 
+                        // /maintena ban|unban|banlist ... (identisch zu den eigenständigen Befehlen)
+                        .then(BanCommandHandler.buildBanTree())
+                        .then(BanCommandHandler.buildUnbanTree())
+                        .then(BanCommandHandler.buildBanlistTree())
+
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                         .then(MaintenanceCommandHandler.buildMaintenanceCommand())
         );
@@ -111,6 +122,11 @@ public class MaintenaCommandHandler {
 
         // Eigenständiger /announce Befehl, funktional identisch zu /maintena announce
         dispatcher.register(AnnouncementCommandHandler.buildAnnounceTree());
+
+        // Eigenständige Ban-Befehle, funktional identisch zu /maintena ban|unban|banlist
+        dispatcher.register(BanCommandHandler.buildBanTree());
+        dispatcher.register(BanCommandHandler.buildUnbanTree());
+        dispatcher.register(BanCommandHandler.buildBanlistTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================
