@@ -10,8 +10,6 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
-import crqzycat.maintena.util.MojangLookup;
-import crqzycat.maintena.util.PlayerNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,14 +77,7 @@ public final class SettingsGUIHandler {
         IPBAN_LIST,
         IPBAN_ENTRY,
         IP_ONLINE,
-        IP_PLAYER,
-        /** Spielersuche; arg = MODUS:Suchtext (MODUS = WHITELIST, BAN oder IPBAN) */
-        PLAYER_SEARCH,
-        /** Loest eine Mojang-Abfrage aus (wird nie selbst angezeigt); arg = MODUS:Name */
-        PLAYER_LOOKUP,
-        /** Ergebnis einer fehlgeschlagenen Abfrage; arg = MODUS:Name:notfound|error */
-        PLAYER_LOOKUP_RESULT,
-        BAN_PLAYER
+        IP_PLAYER
     }
 
     /** Fuer Brigadier: oeffnet die Seite fuer den ausfuehrenden Spieler. */
@@ -155,48 +146,15 @@ public final class SettingsGUIHandler {
             Page page = parsePage(compound.getStringOr(KEY_PAGE, ""));
 
             if (page != null) {
-                String arg = fillPlaceholders(compound.getStringOr(KEY_ARG, ""), compound)
-                        .replaceAll("\\s", "");
+                String arg = compound.getStringOr(KEY_ARG, "").replaceAll("\\s", "");
 
                 if (arg.length() > 64) {
                     arg = arg.substring(0, 64);
                 }
 
-                if (page == Page.PLAYER_LOOKUP) {
-                    lookupThenShow(server, source, player, arg);
-                    return;
-                }
-
                 show(source, player, page, arg.isEmpty() ? null : arg);
             }
         });
-    }
-
-    /**
-     * Fragt bei Mojang nach dem exakten Namen (asynchron) und oeffnet danach die Spielersuche
-     * bzw. eine Fehlerseite. arg = MODUS:Name
-     */
-    private static void lookupThenShow(MinecraftServer server, CommandSourceStack source,
-                                       ServerPlayer player, String arg) {
-        String[] parts = arg.split(":", 2);
-        String mode = parts[0];
-        String name = parts.length > 1 ? parts[1] : "";
-
-        if (!PlayerNames.isValidName(name)) {
-            show(source, player, Page.PLAYER_SEARCH, mode + ":" + name);
-            return;
-        }
-
-        MojangLookup.lookup(name).thenAccept(result -> server.execute(() -> {
-            switch (result.status()) {
-                case FOUND -> {
-                    PlayerNames.remember(result.name());
-                    show(source, player, Page.PLAYER_SEARCH, mode + ":" + result.name());
-                }
-                case NOT_FOUND -> show(source, player, Page.PLAYER_LOOKUP_RESULT, mode + ":" + name + ":notfound");
-                case ERROR -> show(source, player, Page.PLAYER_LOOKUP_RESULT, mode + ":" + name + ":error");
-            }
-        }));
     }
 
     private static Page parsePage(String name) {

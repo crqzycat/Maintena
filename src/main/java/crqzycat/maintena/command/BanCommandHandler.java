@@ -280,7 +280,17 @@ public class BanCommandHandler {
             CommandContext<CommandSourceStack> ctx,
             SuggestionsBuilder builder
     ) {
-        return SharedSuggestionProvider.suggest(PlayerNames.known(), builder);
+        java.util.Set<String> banned = BanManager.getInstance()
+                .getActiveBans(ctx.getSource().getServer())
+                .stream()
+                .map(entry -> entry.getUser().name())
+                .collect(java.util.stream.Collectors.toCollection(
+                        () -> new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER)));
+
+        return SharedSuggestionProvider.suggest(
+                PlayerNames.known().stream().filter(name -> !banned.contains(name)).toList(),
+                builder
+        );
     }
 
     private static CompletableFuture<Suggestions> suggestBannedNames(
