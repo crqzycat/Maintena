@@ -1,6 +1,8 @@
 package crqzycat.maintena.ban;
 
 import net.minecraft.network.chat.Component;
+import crqzycat.maintena.mixin.ServerCommonPacketListenerImplAccessor;
+import net.minecraft.network.Connection;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.IpBanList;
@@ -46,7 +48,9 @@ public class IpBanManager {
      * da PlayerList in dieser Version keine öffentliche Hilfsmethode dafür anbietet.
      */
     public static String getIpAddress(ServerPlayer player) {
-        SocketAddress address = player.connection.getConnection().getRemoteAddress();
+        Connection connection =
+                ((ServerCommonPacketListenerImplAccessor) player.connection).maintena$getConnection();
+        SocketAddress address = connection.getRemoteAddress();
 
         if (address instanceof InetSocketAddress inet && inet.getAddress() != null) {
             return inet.getAddress().getHostAddress();
