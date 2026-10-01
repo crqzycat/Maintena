@@ -45,8 +45,4 @@ This document provides an overview of the planned administration and moderation 
   * Prevents movement, interactions, and optionally chat input.
   * Displays instructions to the frozen player (e.g., to join Discord support).
 
-## 📅 Next Steps
 
-* [ ] Define permission nodes
-* [ ] Finalize command structure and syntax
-* [ ] Begin implementation (Phase 1: Timeout & Freeze)
