@@ -30,7 +30,7 @@ This document provides an overview of the planned administration and moderation 
 * **Goal:** Observe players unnoticed for moderation purposes.
 * **Commands:** `/vanish`, `/v` (toggle), `/vanish on|off|status|list`
 * **Features:**
-  * Hides the staff member from the tab list and the in-game world.
+  * Hides the staff member from the tab list, the locator bar and the in-game world.
   * Operators (gamemaster permission) can still see vanished staff; regular players cannot.
   * Regular players get a "left the game" message when someone vanishes and a "joined the game" message when they become visible again.
   * No entity collisions while vanished: vanished staff neither push nor get pushed by mobs, entities, boats or minecarts. Item pickup works normally.

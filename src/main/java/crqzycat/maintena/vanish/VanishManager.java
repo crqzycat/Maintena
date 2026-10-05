@@ -9,7 +9,9 @@ import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
+import net.minecraft.server.waypoints.ServerWaypointManager;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.waypoints.WaypointTransmitter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Der Zustand liegt nur im Arbeitsspeicher: er bleibt beim Re-Join erhalten, geht aber bei
  * einem Server-Neustart verloren. Das Verstecken in der Spielwelt übernimmt
- * MaintenaTrackedEntityMixin, die fehlenden Kollisionen MaintenaCollisionMixin.
+ * MaintenaTrackedEntityMixin, die Locator Bar MaintenaWaypointMixin, die fehlenden Kollisionen MaintenaCollisionMixin.
  * Items einsammeln funktioniert normal.
  */
 public class VanishManager {
@@ -148,7 +150,13 @@ public class VanishManager {
      * als removeEntity/addEntity, das den Spieler komplett aus dem Chunk-Tracking nimmt).
      */
     private void refreshTracking(ServerPlayer player) {
-        ServerChunkCache chunks = ((ServerLevel) player.level()).getChunkSource();
-        chunks.move(player);
+        ServerLevel level = (ServerLevel) player.level();
+        level.getChunkSource().move(player);
+
+        // Locator Bar: Waypoint neu aufbauen, MaintenaWaypointMixin entscheidet pro Betrachter
+        ServerWaypointManager waypoints = level.getWaypointManager();
+        WaypointTransmitter transmitter = player;
+        waypoints.untrackWaypoint(transmitter);
+        waypoints.trackWaypoint(transmitter);
     }
 }
