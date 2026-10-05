@@ -12,7 +12,8 @@
     "MaintenaMinecartCollisionMixin",
     "MaintenaWaypointMixin",
     "MaintenaPlayerWaypointMixin",
-    "ServerCommonPacketListenerImplAccessor"
+    "ServerCommonPacketListenerImplAccessor",
+    "MaintenaDisguisePlayerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

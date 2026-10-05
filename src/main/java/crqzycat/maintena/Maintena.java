@@ -1,5 +1,7 @@
 package crqzycat.maintena;
 
+import crqzycat.maintena.disguise.DisguiseManager;
+import crqzycat.maintena.event.DisguiseHandler;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import crqzycat.maintena.maintenance.MaintenanceManager;
@@ -27,6 +29,9 @@ public class Maintena implements ModInitializer {
 
         // Register vanish handler (tab list fix on join, actionbar hint)
         VanishHandler.register();
+
+        DisguiseManager.getInstance().initialize();
+        DisguiseHandler.register();
 
         // Initialize manager on server start
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
