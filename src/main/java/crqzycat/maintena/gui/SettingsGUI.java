@@ -6,6 +6,8 @@ import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.ban.IpBanManager;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
+import crqzycat.maintena.mute.MuteData;
+import crqzycat.maintena.mute.MuteManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.minecraft.commands.CommandSourceStack;
@@ -84,6 +86,9 @@ public final class SettingsGUI {
             case IPBAN_ENTRY -> ipBanEntry(a, arg);
             case IP_ONLINE -> ipOnline(a);
             case IP_PLAYER -> ipPlayer(arg);
+            case MUTE -> mute();
+            case MUTE_LIST -> muteList();
+            case MUTE_ENTRY -> muteEntry(arg);
         };
     }
 
@@ -101,6 +106,7 @@ public final class SettingsGUI {
                 .open("Announcements", Page.ANNOUNCE)
                 .open("Bans", Page.BAN)
                 .open("IP bans", Page.IP_BAN)
+                .open("Mutes", Page.MUTE)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -442,6 +448,64 @@ public final class SettingsGUI {
                 .button("IP ban permanently", "ipban " + name + " $(reason)")
                 .button("IP ban temporarily", "ipban " + name + " $(duration) $(reason)")
                 .back(Page.IP_ONLINE)
+                .build();
+    }
+
+    // ==================== Mutes (Chat-Timeouts) ====================
+
+    private static Dialog mute() {
+        int count = MuteManager.getInstance().getActiveMutes().size();
+
+        return new Builder("§6Mutes", Page.MUTE, null)
+                .text("§7Muted players can't chat, but can still use commands. Duration examples: 30m, 24h, 7d, 1d12h")
+                .textInput("player", "Player name", "", 16)
+                .textInput("duration", "Duration (temporary mute)", "30m", 16)
+                .textInput("reason", "Reason (optional)", "", 128)
+                .button("Mute permanently", "mute $(player) $(reason)")
+                .button("Mute temporarily", "mute $(player) $(duration) $(reason)")
+                .open("Muted players (" + count + ")", Page.MUTE_LIST)
+                .button("Show mute list", "mutelist")
+                .back(Page.MAIN)
+                .build();
+    }
+
+    private static Dialog muteList() {
+        List<String> muted = MuteManager.getInstance().getActiveMutes()
+                .stream()
+                .map(entry -> entry.name)
+                .toList();
+
+        Builder b = new Builder("§6Muted players", Page.MUTE_LIST, null)
+                .text(muted.isEmpty() ? "§7No players are muted." : "§7Click a player to manage them.");
+
+        for (String name : muted) {
+            b.open(name, Page.MUTE_ENTRY, name);
+        }
+
+        return b.back(Page.MUTE).build();
+    }
+
+    private static Dialog muteEntry(String name) {
+        MuteManager manager = MuteManager.getInstance();
+        MuteData.Entry entry = manager.findByName(name);
+
+        Builder b = new Builder("§6" + name, Page.MUTE_ENTRY, name);
+
+        if (entry == null) {
+            return b.text("§cThis player is not muted (anymore).")
+                    .back(Page.MUTE_LIST)
+                    .build();
+        }
+
+        b.text("§7" + manager.describeRemaining(entry));
+
+        if (entry.reason != null && !entry.reason.isBlank()) {
+            b.text("§7Reason: §f" + entry.reason);
+        }
+
+        return b.buttonThen("Unmute", "unmute " + name, Page.MUTE_LIST, null)
+                .button("Mute info (chat)", "mute info " + name)
+                .back(Page.MUTE_LIST)
                 .build();
     }
 

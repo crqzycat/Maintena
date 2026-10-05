@@ -4,12 +4,12 @@ This document provides an overview of the planned administration and moderation 
 
 ## 📋 Overview
 
-| Feature | Category | Description | Priority |
-| :--- | :--- | :--- | :--- |
-| **Chat Timeouts** | Moderation | Temporarily restricts players from sending chat messages. | High |
-| **Vanish** | Administration | Makes staff members invisible to regular players. | High |
-| **Disguise** | Administration / Fun | Allows players/staff to disguise as another mob or player. | Medium |
-| **Freeze** | Moderation | Immobilizes a player in place (e.g., during suspected hacking). | High |
+| Feature | Category              | Description | Priority |
+| :--- |:----------------------| :--- | :--- |
+| **Chat Timeouts** | Moderation            | Temporarily restricts players from sending chat messages. | High |
+| **Vanish** | Administration        | Makes staff members invisible to regular players. | High |
+| **Disguise** | Administration /disguise | Allows players/staff to disguise as another mob or player. | Medium |
+| **Freeze** | Moderation            | Immobilizes a player in place (e.g., during suspected hacking). | High |
 
 ## 🛠️ Detailed Feature Breakdown
 

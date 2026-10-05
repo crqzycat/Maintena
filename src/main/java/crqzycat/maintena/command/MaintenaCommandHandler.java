@@ -10,6 +10,7 @@ import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.gui.SettingsGUIHandler;
 import crqzycat.maintena.maintenance.MaintenanceManager;
+import crqzycat.maintena.mute.MuteManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
@@ -41,6 +42,7 @@ import java.util.List;
  *   /maintena announce      Announcement-Menü
  *   /maintena ban           Ban-Menü
  *   /maintena ipban         IP-Ban-Menü
+ *   /maintena mute          Mute-Menü (Chat-Timeouts)
  */
 public class MaintenaCommandHandler {
 
@@ -105,6 +107,7 @@ public class MaintenaCommandHandler {
                                     RestartManager.getInstance().reload();
                                     AnnouncementManager.getInstance().reload();
                                     BanManager.getInstance().reload();
+                                    MuteManager.getInstance().reload();
 
                                     ctx.getSource().sendSuccess(
                                             () -> Component.literal("§a✓ Maintena config reloaded"),
@@ -132,6 +135,12 @@ public class MaintenaCommandHandler {
                         .then(IpBanCommandHandler.buildIpUnbanTree())
                         .then(IpBanCommandHandler.buildIpBanlistTree())
 
+                        // /maintena mute|unmute|mutelist ... (identisch zu den eigenständigen Befehlen)
+                        .then(MuteCommandHandler.buildMuteTree()
+                                .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MUTE)))
+                        .then(MuteCommandHandler.buildUnmuteTree())
+                        .then(MuteCommandHandler.buildMutelistTree())
+
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                         .then(MaintenanceCommandHandler.buildMaintenanceCommand()
                                 .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE)))
@@ -153,6 +162,11 @@ public class MaintenaCommandHandler {
         dispatcher.register(IpBanCommandHandler.buildIpBanTree());
         dispatcher.register(IpBanCommandHandler.buildIpUnbanTree());
         dispatcher.register(IpBanCommandHandler.buildIpBanlistTree());
+
+        // Eigenständige Mute-Befehle (Chat-Timeouts), funktional identisch zu /maintena mute|unmute|mutelist
+        dispatcher.register(MuteCommandHandler.buildMuteTree());
+        dispatcher.register(MuteCommandHandler.buildUnmuteTree());
+        dispatcher.register(MuteCommandHandler.buildMutelistTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

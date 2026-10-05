@@ -7,6 +7,8 @@ import com.google.gson.JsonArray;
 import crqzycat.maintena.announcement.AnnouncementData;
 import crqzycat.maintena.ban.BanConfig;
 import crqzycat.maintena.maintenance.MaintenanceData;
+import crqzycat.maintena.mute.MuteConfig;
+import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.restart.RestartData;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -27,6 +29,8 @@ public class PersistenceUtil {
     private static final File ANNOUNCEMENT_DATA_FILE = CONFIG_DIR.resolve("announcements.json").toFile();
     private static final File ANNOUNCEMENT_CONFIG_FILE = CONFIG_DIR.resolve("announcement-config.json").toFile();
     private static final File BAN_CONFIG_FILE = CONFIG_DIR.resolve("ban-config.json").toFile();
+    private static final File MUTE_DATA_FILE = CONFIG_DIR.resolve("mutes.json").toFile();
+    private static final File MUTE_CONFIG_FILE = CONFIG_DIR.resolve("mute-config.json").toFile();
     
     static {
         try {
@@ -285,6 +289,75 @@ public class PersistenceUtil {
         } catch (IOException e) {
             e.printStackTrace();
             return new BanConfig();
+        }
+    }
+
+    // ==================== Mutes ====================
+
+    public static void saveMuteData(MuteData data) {
+        try {
+            if (!MUTE_DATA_FILE.exists()) {
+                MUTE_DATA_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(MUTE_DATA_FILE)) {
+                GSON.toJson(data, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static MuteData loadMuteData() {
+        if (!MUTE_DATA_FILE.exists()) {
+            return new MuteData();
+        }
+
+        try (FileReader reader = new FileReader(MUTE_DATA_FILE)) {
+            MuteData data = GSON.fromJson(reader, MuteData.class);
+
+            if (data == null) {
+                return new MuteData();
+            }
+
+            if (data.mutes == null) {
+                data.mutes = new java.util.ArrayList<>();
+            }
+
+            return data;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new MuteData();
+        }
+    }
+
+    public static void saveMuteConfig(MuteConfig config) {
+        try {
+            if (!MUTE_CONFIG_FILE.exists()) {
+                MUTE_CONFIG_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(MUTE_CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static MuteConfig loadMuteConfig() {
+        if (!MUTE_CONFIG_FILE.exists()) {
+            MuteConfig config = new MuteConfig();
+            saveMuteConfig(config); // Create default config
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(MUTE_CONFIG_FILE)) {
+            MuteConfig config = GSON.fromJson(reader, MuteConfig.class);
+            return config != null ? config : new MuteConfig();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new MuteConfig();
         }
     }
 }

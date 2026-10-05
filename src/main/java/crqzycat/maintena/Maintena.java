@@ -8,6 +8,7 @@ import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.command.MaintenanceCommandHandler;
 import crqzycat.maintena.command.MaintenaCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
+import crqzycat.maintena.event.ChatMuteHandler;
 
 public class Maintena implements ModInitializer {
 
@@ -19,6 +20,9 @@ public class Maintena implements ModInitializer {
 
         // Register login event handler to kick non-whitelisted players
         LoginEventHandler.register();
+
+        // Register chat mute handler (blocks chat/msg/me for muted players, commands still work)
+        ChatMuteHandler.register();
 
         // Initialize manager on server start
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
