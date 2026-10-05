@@ -1,5 +1,7 @@
 package crqzycat.maintena.vanish;
 
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
@@ -85,7 +87,13 @@ public class VanishManager {
         // Spielwelt: Tracking neu aufbauen, das Mixin entscheidet pro Betrachter
         refreshTracking(player);
 
-        // Tab-Liste: für alle, die den Spieler nicht sehen dürfen, entfernen bzw. wieder eintragen
+        // Tab-Liste + Chat: für alle, die den Spieler nicht sehen dürfen, entfernen bzw. wieder
+        // eintragen und eine Leave-/Join-Meldung zeigen, als hätte der Spieler den Server verlassen
+        Component message = Component.translatable(
+                value ? "multiplayer.player.left" : "multiplayer.player.joined",
+                player.getDisplayName()
+        ).withStyle(ChatFormatting.YELLOW);
+
         MinecraftServer server = player.level().getServer();
 
         for (ServerPlayer other : server.getPlayerList().getPlayers()) {
@@ -98,6 +106,8 @@ public class VanishManager {
             } else {
                 other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
             }
+
+            other.sendSystemMessage(message);
         }
 
         return true;
@@ -132,12 +142,13 @@ public class VanishManager {
     }
 
     /**
-     * Baut das Entity-Tracking des Spielers neu auf, damit sich die Sichtbarkeit sofort
-     * ändert (nicht erst, wenn jemand einen Chunk-Abschnitt wechselt).
+     * Wertet das Entity-Tracking des Spielers für alle Betrachter neu aus, damit sich die
+     * Sichtbarkeit sofort ändert. ServerChunkCache.move ist derselbe Aufruf, den Vanilla bei
+     * jeder Bewegung macht: Er prüft nur die Sichtbarkeit und lädt keine Chunks neu (anders
+     * als removeEntity/addEntity, das den Spieler komplett aus dem Chunk-Tracking nimmt).
      */
     private void refreshTracking(ServerPlayer player) {
         ServerChunkCache chunks = ((ServerLevel) player.level()).getChunkSource();
-        chunks.removeEntity(player);
-        chunks.addEntity(player);
+        chunks.move(player);
     }
 }
