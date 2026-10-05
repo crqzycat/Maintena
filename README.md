@@ -32,10 +32,11 @@ This document provides an overview of the planned administration and moderation 
 * **Features:**
   * Hides the staff member from the tab list and the in-game world.
   * Operators (gamemaster permission) can still see vanished staff; regular players cannot.
+  * Regular players get a "left the game" message when someone vanishes and a "joined the game" message when they become visible again.
   * No entity collisions while vanished: vanished staff neither push nor get pushed by mobs, entities, boats or minecarts. Item pickup works normally.
   * Actionbar hint while vanished; state is kept on re-join, but reset on server restart.
   * Also available in the settings menu (`/maintena vanish`).
-* **Known limitations:** join/leave messages, `/list`, the server-list player count and tab-completion of names still reveal a vanished player.
+* **Known limitations:** the real join/leave messages when a vanished player actually disconnects or reconnects, `/list`, the server-list player count and tab-completion of names still reveal a vanished player.
 
 ### 3. Disguise
 
