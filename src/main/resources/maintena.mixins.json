@@ -7,6 +7,9 @@
     "MaintenaServerStatusMixin",
     "MaintenaPlayerListMixin",
     "MaintenaClickActionMixin",
+    "MaintenaTrackedEntityMixin",
+    "MaintenaCollisionMixin",
+    "MaintenaMinecartCollisionMixin",
     "ServerCommonPacketListenerImplAccessor"
   ],
   "injectors": {

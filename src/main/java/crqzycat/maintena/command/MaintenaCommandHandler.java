@@ -43,6 +43,7 @@ import java.util.List;
  *   /maintena ban           Ban-Menü
  *   /maintena ipban         IP-Ban-Menü
  *   /maintena mute          Mute-Menü (Chat-Timeouts)
+ *   /maintena vanish        Vanish-Menü
  */
 public class MaintenaCommandHandler {
 
@@ -141,6 +142,10 @@ public class MaintenaCommandHandler {
                         .then(MuteCommandHandler.buildUnmuteTree())
                         .then(MuteCommandHandler.buildMutelistTree())
 
+                        // /maintena vanish ... (identisch zu /vanish, ohne Argumente öffnet sich das Menü)
+                        .then(VanishCommandHandler.buildVanishTree("vanish")
+                                .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.VANISH)))
+
                         // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                         .then(MaintenanceCommandHandler.buildMaintenanceCommand()
                                 .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE)))
@@ -165,8 +170,13 @@ public class MaintenaCommandHandler {
 
         // Eigenständige Mute-Befehle (Chat-Timeouts), funktional identisch zu /maintena mute|unmute|mutelist
         dispatcher.register(MuteCommandHandler.buildMuteTree());
+        dispatcher.register(MuteCommandHandler.buildMuteTree("timeout"));
         dispatcher.register(MuteCommandHandler.buildUnmuteTree());
         dispatcher.register(MuteCommandHandler.buildMutelistTree());
+
+        // Eigenständiger /vanish und Kurzform /v
+        dispatcher.register(VanishCommandHandler.buildVanishTree("vanish"));
+        dispatcher.register(VanishCommandHandler.buildVanishTree("v"));
     }
 
     // ==================== /maintena restart  &  /restart ====================

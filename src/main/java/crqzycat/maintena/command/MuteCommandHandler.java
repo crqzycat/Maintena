@@ -36,6 +36,9 @@ import java.util.stream.Collectors;
  *   /mute info <player>                 Details zu einem Mute
  *   /unmute <player>                    Mute aufheben
  *   /mutelist [seite]                   alle aktiven Mutes
+ *   /timeout ...                        Alias von /mute (gleiche Argumente)
+ *
+ * Dauer: Sekunden, Minuten, Stunden, Tage, kombinierbar (z.B. 10s, 10m, 1h, 1d12h).
  */
 public class MuteCommandHandler {
 
@@ -46,7 +49,11 @@ public class MuteCommandHandler {
     // ==================== Befehlsbäume ====================
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildMuteTree() {
-        return Commands.literal("mute")
+        return buildMuteTree("mute");
+    }
+
+    public static LiteralArgumentBuilder<CommandSourceStack> buildMuteTree(String name) {
+        return Commands.literal(name)
                 .requires(MuteCommandHandler::hasPermission)
 
                 .then(Commands.literal("info")
@@ -129,7 +136,7 @@ public class MuteCommandHandler {
 
                 if (duration == null) {
                     source.sendFailure(Component.literal(
-                            "§c✗ Invalid duration \"" + parts[0] + "\" (use e.g. 30m, 24h, 7d, 1d12h)"
+                            "§c✗ Invalid duration \"" + parts[0] + "\" (use e.g. 30s, 10m, 1h, 7d, 1d12h)"
                     ));
                     return 0;
                 }
@@ -290,6 +297,7 @@ public class MuteCommandHandler {
             builder.suggest(typed + "d");
             builder.suggest(typed + "h");
             builder.suggest(typed + "m");
+            builder.suggest(typed + "s");
         }
 
         return builder.buildFuture();

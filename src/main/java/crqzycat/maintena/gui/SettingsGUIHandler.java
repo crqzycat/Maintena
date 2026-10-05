@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
  *   /maintena ban           Ban-Menue
  *   /maintena ipban         IP-Ban-Menue
  *   /maintena mute          Mute-Menue (Chat-Timeouts)
+ *   /maintena vanish        Vanish-Menue
  *
  * Die Rechte-Pruefung macht der /maintena Befehl selbst (Gamemaster/OP). Die Buttons senden eine
  * custom click action; der Server fuehrt den Befehl mit den Rechten des Spielers aus.
@@ -51,7 +52,7 @@ public final class SettingsGUIHandler {
     private static final Set<String> ALLOWED_ROOTS = Set.of(
             "maintena", "maintenance", "restart", "announce",
             "ban", "unban", "banlist", "ip", "ipban", "ipunban", "ipbanlist",
-            "mute", "unmute", "mutelist"
+            "mute", "unmute", "mutelist", "vanish"
     );
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\(([A-Za-z0-9_]+)\\)");
@@ -82,7 +83,8 @@ public final class SettingsGUIHandler {
         IP_PLAYER,
         MUTE,
         MUTE_LIST,
-        MUTE_ENTRY
+        MUTE_ENTRY,
+        VANISH
     }
 
     /** Fuer Brigadier: oeffnet die Seite fuer den ausfuehrenden Spieler. */

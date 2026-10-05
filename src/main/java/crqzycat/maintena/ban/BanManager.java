@@ -29,10 +29,10 @@ public class BanManager {
 
     private BanConfig config;
 
-    // Kombinierbar in der Reihenfolge d -> h -> m, z.B. 7d, 24h, 30m, 1d12h
-    private static final Pattern DURATION_LIKE = Pattern.compile("^(?:\\d+[dhm])+$", Pattern.CASE_INSENSITIVE);
+    // Kombinierbar in der Reihenfolge d -> h -> m -> s, z.B. 7d, 24h, 30m, 45s, 1d12h
+    private static final Pattern DURATION_LIKE = Pattern.compile("^(?:\\d+[dhms])+$", Pattern.CASE_INSENSITIVE);
     private static final Pattern DURATION = Pattern.compile(
-            "^(?:(\\d+)d)?(?:(\\d+)h)?(?:(\\d+)m)?$", Pattern.CASE_INSENSITIVE);
+            "^(?:(\\d+)d)?(?:(\\d+)h)?(?:(\\d+)m)?(?:(\\d+)s)?$", Pattern.CASE_INSENSITIVE);
 
     private BanManager() {
         this.config = PersistenceUtil.loadBanConfig();
@@ -64,7 +64,7 @@ public class BanManager {
     }
 
     /**
-     * Wandelt "7d", "24h", "30m" oder Kombinationen wie "1d12h" in Millisekunden um.
+     * Wandelt "7d", "24h", "30m", "45s" oder Kombinationen wie "1d12h" in Millisekunden um.
      * Liefert null bei ungültiger Eingabe, 0 oder Überlauf.
      */
     public static Long parseDuration(String token) {
@@ -78,13 +78,14 @@ public class BanManager {
             long days = matcher.group(1) != null ? Long.parseLong(matcher.group(1)) : 0;
             long hours = matcher.group(2) != null ? Long.parseLong(matcher.group(2)) : 0;
             long minutes = matcher.group(3) != null ? Long.parseLong(matcher.group(3)) : 0;
+            long seconds = matcher.group(4) != null ? Long.parseLong(matcher.group(4)) : 0;
 
-            long totalMinutes = Math.addExact(
-                    Math.addExact(Math.multiplyExact(days, 1440L), Math.multiplyExact(hours, 60L)),
-                    minutes
+            long totalSeconds = Math.addExact(
+                    Math.addExact(Math.multiplyExact(days, 86_400L), Math.multiplyExact(hours, 3_600L)),
+                    Math.addExact(Math.multiplyExact(minutes, 60L), seconds)
             );
 
-            long millis = Math.multiplyExact(totalMinutes, 60_000L);
+            long millis = Math.multiplyExact(totalSeconds, 1_000L);
 
             if (millis <= 0) {
                 return null;

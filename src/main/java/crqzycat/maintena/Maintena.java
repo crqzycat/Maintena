@@ -9,6 +9,7 @@ import crqzycat.maintena.command.MaintenanceCommandHandler;
 import crqzycat.maintena.command.MaintenaCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
 import crqzycat.maintena.event.ChatMuteHandler;
+import crqzycat.maintena.event.VanishHandler;
 
 public class Maintena implements ModInitializer {
 
@@ -23,6 +24,9 @@ public class Maintena implements ModInitializer {
 
         // Register chat mute handler (blocks chat/msg/me for muted players, commands still work)
         ChatMuteHandler.register();
+
+        // Register vanish handler (tab list fix on join, actionbar hint)
+        VanishHandler.register();
 
         // Initialize manager on server start
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {

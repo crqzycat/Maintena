@@ -4,30 +4,38 @@ This document provides an overview of the planned administration and moderation 
 
 ## 📋 Overview
 
-| Feature | Category              | Description | Priority |
-| :--- |:----------------------| :--- | :--- |
-| **Chat Timeouts** | Moderation            | Temporarily restricts players from sending chat messages. | High |
-| **Vanish** | Administration        | Makes staff members invisible to regular players. | High |
-| **Disguise** | Administration /disguise | Allows players/staff to disguise as another mob or player. | Medium |
-| **Freeze** | Moderation            | Immobilizes a player in place (e.g., during suspected hacking). | High |
+| Feature | Category              | Description | Priority | Status |
+| :--- |:----------------------| :--- | :--- | :--- |
+| **Chat Timeouts** | Moderation            | Temporarily restricts players from sending chat messages. | High | ✅ Implemented |
+| **Vanish** | Administration        | Makes staff members invisible to regular players. | High | ✅ Implemented |
+| **Disguise** | Administration /disguise | Allows players/staff to disguise as another mob or player. | Medium | ⏳ Planned |
+| **Freeze** | Moderation            | Immobilizes a player in place (e.g., during suspected hacking). | High | ⏳ Planned |
 
 ## 🛠️ Detailed Feature Breakdown
 
-### 1. Chat Timeouts
+### 1. Chat Timeouts ✅
 
 * **Goal:** Temporarily mute players who violate chat rules.
-* **Suggested Commands:** `/timeout <player> <duration> [reason]`
+* **Commands:** `/timeout <player> <duration> [reason]` (alias: `/mute`), `/timeout info <player>`, `/unmute <player>`, `/mutelist [page]`
 * **Features:**
-  * Duration formats in seconds, minutes, or hours (e.g., `10m`, `1h`).
+  * Duration formats in seconds, minutes, hours or days, combinable (e.g., `30s`, `10m`, `1h`, `1d12h`). Without a duration the timeout is permanent.
   * Automatic message sent to the target player showing reason and duration.
+  * Blocks normal chat as well as `/msg`, `/tell`, `/w`, `/me`, `/say` and `/teammsg`. All other commands keep working.
+  * Timeouts survive restarts (`config/maintena/mutes.json`); texts are configurable in `mute-config.json`.
+  * Expired timeouts are removed automatically and the player is notified.
+  * Also available in the settings menu (`/maintena mute`).
 
-### 2. Vanish
+### 2. Vanish ✅
 
 * **Goal:** Observe players unnoticed for moderation purposes.
-* **Suggested Commands:** `/vanish`, `/v`
+* **Commands:** `/vanish`, `/v` (toggle), `/vanish on|off|status|list`
 * **Features:**
   * Hides the staff member from the tab list and the in-game world.
-  * Disables item pickup while vanished to avoid interfering with gameplay.
+  * Operators (gamemaster permission) can still see vanished staff; regular players cannot.
+  * No entity collisions while vanished: vanished staff neither push nor get pushed by mobs, entities, boats or minecarts. Item pickup works normally.
+  * Actionbar hint while vanished; state is kept on re-join, but reset on server restart.
+  * Also available in the settings menu (`/maintena vanish`).
+* **Known limitations:** join/leave messages, `/list`, the server-list player count and tab-completion of names still reveal a vanished player.
 
 ### 3. Disguise
 
@@ -44,5 +52,3 @@ This document provides an overview of the planned administration and moderation 
 * **Features:**
   * Prevents movement, interactions, and optionally chat input.
   * Displays instructions to the frozen player (e.g., to join Discord support).
-
-

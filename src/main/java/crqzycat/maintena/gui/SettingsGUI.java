@@ -8,6 +8,8 @@ import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.mute.MuteManager;
+import crqzycat.maintena.vanish.VanishManager;
+import net.minecraft.server.level.ServerPlayer;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.minecraft.commands.CommandSourceStack;
@@ -89,6 +91,7 @@ public final class SettingsGUI {
             case MUTE -> mute();
             case MUTE_LIST -> muteList();
             case MUTE_ENTRY -> muteEntry(arg);
+            case VANISH -> vanish(a);
         };
     }
 
@@ -107,6 +110,7 @@ public final class SettingsGUI {
                 .open("Bans", Page.BAN)
                 .open("IP bans", Page.IP_BAN)
                 .open("Mutes", Page.MUTE)
+                .open("Vanish", Page.VANISH)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -506,6 +510,24 @@ public final class SettingsGUI {
         return b.buttonThen("Unmute", "unmute " + name, Page.MUTE_LIST, null)
                 .button("Mute info (chat)", "mute info " + name)
                 .back(Page.MUTE_LIST)
+                .build();
+    }
+
+    // ==================== Vanish ====================
+
+    private static Dialog vanish(CommandSourceStack a) {
+        ServerPlayer self = a.getPlayer();
+        boolean vanished = self != null && VanishManager.getInstance().isVanished(self);
+        int others = VanishManager.getInstance().getOnlineVanished(a.getServer()).size();
+
+        return new Builder("§6Vanish", Page.VANISH, null)
+                .text(vanished ? "§bYou are vanished." : "§7You are visible.")
+                .text("§7Vanished players are hidden from regular players (world and tab list). "
+                        + "Operators can still see them. Currently vanished: " + others)
+                .button("Vanish", "vanish on")
+                .button("Become visible", "vanish off")
+                .button("Show vanished players (chat)", "vanish list")
+                .back(Page.MAIN)
                 .build();
     }
 
