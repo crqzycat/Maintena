@@ -13,8 +13,12 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.PrimedTnt;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,9 +30,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * Manages mob and player disguises.
  *
  * <p>How it works: the disguise is a separate entity that follows the player. The real player is
- * hidden from every other viewer by {@code MaintenaDisguiseTrackingMixin}, and the disguise entity is
- * hidden from its owner, so the owner keeps seeing his own body and nobody else ever sees the real one
- * (no invisibility flag involved, so nothing can get stuck invisible).
+ * hidden from every other viewer by {@code MaintenaDisguiseTrackingMixin} and additionally set
+ * invisible, so the owner sees the disguise (third person) instead of his own body. The previous
+ * invisibility state is restored on undisguise, disconnect and server stop.
  *
  * <p>For player disguises the fake player gets its own random UUID (never the owner's or the target's)
  * and the clients receive a hidden (unlisted) player-info entry so name and skin are known before the
@@ -48,6 +52,9 @@ public final class DisguiseManager {
         final EntityType<?> type;
         /** Player disguise: the profile (name + skin) of the target (null for mob disguises). */
         final GameProfile skin;
+
+        /** Invisibility of the player before the disguise, restored afterwards. */
+        boolean wasInvisible;
 
         Entity entity;
         int windowStart;
@@ -74,7 +81,7 @@ public final class DisguiseManager {
 
     public void initialize() {
         ServerTickEvents.END_SERVER_TICK.register(this::tick);
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> shutdown());
+        ServerLifecycleEvents.SERVER_STOPPING.register(this::shutdown);
     }
 
     // ==================== queries ====================
@@ -156,11 +163,24 @@ public final class DisguiseManager {
 
     /** Called when a player disconnects: clean up without touching the (already leaving) player. */
     public void onDisconnect(ServerPlayer player) {
+        State state = disguises.get(player.getUUID());
+
+        if (state != null) {
+            player.setInvisible(state.wasInvisible);
+        }
+
         release(player.getUUID(), null);
     }
 
     /** Called when a player joins: hand him the hidden player-info entries of active player disguises. */
     public void onJoin(ServerPlayer joined) {
+        // Safety net: invisibility left over from a crash while disguised
+        if (!disguises.containsKey(joined.getUUID())
+                && joined.isInvisible()
+                && !joined.hasEffect(MobEffects.INVISIBILITY)) {
+            joined.setInvisible(false);
+        }
+
         for (State state : disguises.values()) {
             if (state.entity instanceof ServerPlayer fake && !state.owner.equals(joined.getUUID())) {
                 joined.connection.send(new ClientboundPlayerInfoUpdatePacket(
@@ -169,8 +189,14 @@ public final class DisguiseManager {
         }
     }
 
-    public void shutdown() {
+    public void shutdown(MinecraftServer server) {
         for (State state : List.copyOf(disguises.values())) {
+            ServerPlayer owner = server.getPlayerList().getPlayer(state.owner);
+
+            if (owner != null) {
+                owner.setInvisible(state.wasInvisible);
+            }
+
             drop(state);
         }
 
@@ -184,6 +210,7 @@ public final class DisguiseManager {
         undisguise(player);
 
         // Registered before spawning so the tracking mixin already hides the right entities
+        state.wasInvisible = player.isInvisible();
         disguises.put(state.owner, state);
 
         if (!spawn(state, player)) {
@@ -191,6 +218,7 @@ public final class DisguiseManager {
             return false;
         }
 
+        player.setInvisible(true);
         refreshTracking(player);
         return true;
     }
@@ -205,6 +233,7 @@ public final class DisguiseManager {
         drop(state);
 
         if (refresh != null && !refresh.isRemoved()) {
+            refresh.setInvisible(state.wasInvisible);
             refreshTracking(refresh);
         }
     }
@@ -268,17 +297,7 @@ public final class DisguiseManager {
             return FakePlayer.get(level, fakeProfile);
         }
 
-        Entity entity = state.type.create(level, EntitySpawnReason.COMMAND);
-
-        if (entity instanceof LivingEntity) {
-            return entity;
-        }
-
-        if (entity != null) {
-            entity.discard();
-        }
-
-        return null;
+        return state.type.create(level, EntitySpawnReason.COMMAND);
     }
 
     private static void prepare(Entity entity, ServerPlayer player) {
@@ -286,10 +305,20 @@ public final class DisguiseManager {
         entity.setNoGravity(true);
         entity.setSilent(true);
         entity.setPermanentlyInvulnerable(true);
+        entity.setDeltaMovement(Vec3.ZERO);
 
         if (entity instanceof Mob mob) {
             mob.setNoAi(true);
             mob.setPersistenceRequired();
+        }
+
+        // Make the "dangerous" ones harmless
+        if (entity instanceof PrimedTnt tnt) {
+            tnt.setFuse(Integer.MAX_VALUE);
+        }
+
+        if (entity instanceof Projectile projectile) {
+            projectile.setOwner(player); // a projectile never hits its own owner
         }
     }
 
@@ -347,12 +376,17 @@ public final class DisguiseManager {
                 disguise = state.entity;
             }
 
+            if (!player.isInvisible()) {
+                player.setInvisible(true);
+            }
+
             sync(state, disguise, player);
         }
     }
 
     private static void sync(State state, Entity disguise, ServerPlayer player) {
         moveToPlayer(disguise, player);
+        disguise.setDeltaMovement(Vec3.ZERO);
         disguise.setOnGround(player.onGround());
 
         if (state.skin != null) {

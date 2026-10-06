@@ -17,7 +17,6 @@ import java.util.UUID;
  * Decides per viewer what is sent for disguises:
  * <ul>
  *   <li>a disguised player is not sent to anybody else (they see the disguise entity instead),</li>
- *   <li>the disguise entity is not sent to its owner (he sees his own body),</li>
  *   <li>the disguise entity is not sent to viewers who must not see its (vanished) owner.</li>
  * </ul>
  */
@@ -47,15 +46,14 @@ public abstract class MaintenaDisguiseTrackingMixin {
             return;
         }
 
-        boolean hide = ownerId.equals(viewer.getUUID());
-
-        if (!hide) {
-            ServerPlayer owner = viewer.level().getServer().getPlayerList().getPlayer(ownerId);
-            VanishManager vanish = VanishManager.getInstance();
-            hide = owner != null && vanish.isVanished(owner) && !vanish.canSee(viewer);
+        if (ownerId.equals(viewer.getUUID())) {
+            return; // the owner sees his own disguise
         }
 
-        if (hide) {
+        ServerPlayer owner = viewer.level().getServer().getPlayerList().getPlayer(ownerId);
+        VanishManager vanish = VanishManager.getInstance();
+
+        if (owner != null && vanish.isVanished(owner) && !vanish.canSee(viewer)) {
             this.removePlayer(viewer);
             ci.cancel();
         }

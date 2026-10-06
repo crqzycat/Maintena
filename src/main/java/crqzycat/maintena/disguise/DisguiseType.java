@@ -14,11 +14,27 @@ import java.util.Set;
 /** Resolves entity IDs on Minecraft 26.3 and decides which entities may be used as a disguise. */
 public final class DisguiseType {
 
-    /** Entities that must never be used (boss bars, players, ...). */
+    /**
+     * The only entities that can't be used. Everything else (mobs, bosses, vehicles, projectiles,
+     * display entities, ...) works.
+     * <ul>
+     *   <li>item, experience_orb: items/orbs (excluded on purpose, orbs would be picked up at once)</li>
+     *   <li>player, fishing_bobber, lightning_bolt: technical entities (use /disguise &lt;player&gt;)</li>
+     *   <li>falling_block, painting, item_frame, glow_item_frame, leash_knot: turn into a block or drop
+     *       an item every few seconds when they don't sit where they should</li>
+     * </ul>
+     */
     private static final Set<String> BLOCKED = Set.of(
+            "minecraft:item",
+            "minecraft:experience_orb",
             "minecraft:player",
-            "minecraft:ender_dragon",
-            "minecraft:wither"
+            "minecraft:fishing_bobber",
+            "minecraft:lightning_bolt",
+            "minecraft:falling_block",
+            "minecraft:painting",
+            "minecraft:item_frame",
+            "minecraft:glow_item_frame",
+            "minecraft:leash_knot"
     );
 
     private DisguiseType() {}
@@ -39,7 +55,7 @@ public final class DisguiseType {
         return BuiltInRegistries.ENTITY_TYPE.getOptional(identifier);
     }
 
-    /** Summonable and not on the block list. */
+    /** Summonable and not on the (short) block list. */
     public static boolean isAllowed(EntityType<?> type) {
         if (type == null || !type.canSummon()) return false;
         return !BLOCKED.contains(BuiltInRegistries.ENTITY_TYPE.getKey(type).toString());
