@@ -1,6 +1,7 @@
 package crqzycat.maintena.disguise;
 
 import com.mojang.authlib.GameProfile;
+import crqzycat.maintena.vanish.VanishManager;
 import net.fabricmc.fabric.api.entity.FakePlayer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -10,15 +11,17 @@ import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntitySpawnReason;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,35 +30,45 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Manages mob and player disguises.
+ * Manages mob/entity and player disguises. There are two different mechanisms:
  *
- * <p>How it works: the disguise is a separate entity that follows the player. The real player is
- * hidden from every other viewer by {@code MaintenaDisguiseTrackingMixin} and additionally set
- * invisible, so the owner sees the disguise (third person) instead of his own body. The previous
- * invisibility state is restored on undisguise, disconnect and server stop.
+ * <p><b>Player disguise</b> (as another account): no extra entity at all. The real player entity stays
+ * in the world (so animations, equipment, hitbox and damage all just work); only the identity the
+ * other clients know for his UUID is swapped: a hidden player-info entry with the target's name and
+ * skin replaces the real one, then the entity is re-sent so clients rebuild it with the new identity.
+ * The {@link FakePlayer} is only used as a packet source and is never added to the world.
  *
- * <p>For player disguises the fake player gets its own random UUID (never the owner's or the target's)
- * and the clients receive a hidden (unlisted) player-info entry so name and skin are known before the
- * entity is spawned.
+ * <p><b>Entity disguise</b> (as a mob, boat, ...): a separate entity follows the player. The real
+ * player is hidden from everybody else by {@code MaintenaDisguiseTrackingMixin} and set invisible, so
+ * the owner sees the disguise instead of his body. The previous invisibility is restored afterwards.
  */
 public final class DisguiseManager {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
     private static final DisguiseManager INSTANCE = new DisguiseManager();
 
     /** More than this many rebuilds inside the window means the entity can't be kept alive (e.g. Peaceful). */
     private static final int MAX_REBUILDS = 5;
     private static final int REBUILD_WINDOW_TICKS = 100;
 
+    /** Ticks between "hide the entity" and "show it again with the new identity". */
+    private static final int RESHOW_DELAY_TICKS = 2;
+
     private static final class State {
         final UUID owner;
-        /** Mob disguise: the entity type (null for player disguises). */
+        /** Entity disguise: the entity type (null for player disguises). */
         final EntityType<?> type;
-        /** Player disguise: the profile (name + skin) of the target (null for mob disguises). */
+        /** Player disguise: the profile (name + skin) of the target (null for entity disguises). */
         final GameProfile skin;
 
-        /** Invisibility of the player before the disguise, restored afterwards. */
-        boolean wasInvisible;
+        /** Player disguise: packet source carrying the fake identity (never added to the world). */
+        ServerPlayer packetSource;
+        /** Player disguise: true while the real entity is hidden to re-send it with the new identity. */
+        volatile boolean refreshing;
 
+        /** Entity disguise: invisibility of the player before the disguise, restored afterwards. */
+        boolean wasInvisible;
+        /** Entity disguise: the entity following the player. */
         Entity entity;
         int windowStart;
         int rebuilds;
@@ -69,8 +82,10 @@ public final class DisguiseManager {
 
     /** owner UUID -> disguise. Concurrent because mixins may read it from other threads. */
     private final Map<UUID, State> disguises = new ConcurrentHashMap<>();
-    /** disguise entity UUID -> owner UUID. */
+    /** disguise entity UUID -> owner UUID (entity disguises only). */
     private final Map<UUID, UUID> entityOwners = new ConcurrentHashMap<>();
+    /** owner UUID -> server tick at which the real entity is shown to others again. */
+    private final Map<UUID, Integer> pendingShow = new ConcurrentHashMap<>();
 
     private DisguiseManager() {
     }
@@ -90,13 +105,32 @@ public final class DisguiseManager {
         return !disguises.isEmpty() && disguises.containsKey(player.getUUID());
     }
 
-    /** The disguise entity of this player, or null. */
+    /**
+     * Must the real player entity be hidden from everybody else right now? True for entity disguises
+     * (a separate entity is shown instead) and briefly while a player identity is being swapped.
+     */
+    public boolean isHiddenFromOthers(ServerPlayer player) {
+        if (disguises.isEmpty() && pendingShow.isEmpty()) {
+            return false;
+        }
+
+        UUID id = player.getUUID();
+
+        if (pendingShow.containsKey(id)) {
+            return true;
+        }
+
+        State state = disguises.get(id);
+        return state != null && (state.skin == null || state.refreshing);
+    }
+
+    /** The disguise entity of this player (entity disguises only), or null. */
     public Entity getDisguise(ServerPlayer player) {
         State state = disguises.get(player.getUUID());
         return state == null ? null : state.entity;
     }
 
-    /** Name of the impersonated player, or null (not disguised or disguised as a mob). */
+    /** Name of the impersonated player, or null (not disguised or disguised as an entity). */
     public String getPlayerDisguiseName(ServerPlayer player) {
         if (disguises.isEmpty()) return null;
 
@@ -104,7 +138,7 @@ public final class DisguiseManager {
         return state == null || state.skin == null ? null : state.skin.name();
     }
 
-    /** Entity type of a mob disguise, or null. */
+    /** Entity type of an entity disguise, or null. */
     public EntityType<?> getDisguiseType(ServerPlayer player) {
         State state = disguises.get(player.getUUID());
         return state == null ? null : state.type;
@@ -174,14 +208,14 @@ public final class DisguiseManager {
     public void onDisconnect(ServerPlayer player) {
         State state = disguises.get(player.getUUID());
 
-        if (state != null) {
+        if (state != null && state.skin == null) {
             player.setInvisible(state.wasInvisible);
         }
 
         release(player.getUUID(), null);
     }
 
-    /** Called when a player joins: hand him the hidden player-info entries of active player disguises. */
+    /** Called when a player joins: hand him the swapped identities of players that are disguised right now. */
     public void onJoin(ServerPlayer joined) {
         // Safety net: invisibility left over from a crash while disguised
         if (!disguises.containsKey(joined.getUUID())
@@ -190,20 +224,33 @@ public final class DisguiseManager {
             joined.setInvisible(false);
         }
 
+        MinecraftServer server = joined.level().getServer();
+
         for (State state : disguises.values()) {
-            if (state.entity instanceof ServerPlayer fake && !state.owner.equals(joined.getUUID())) {
-                joined.connection.send(new ClientboundPlayerInfoUpdatePacket(
-                        ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, fake));
+            if (state.packetSource == null || state.owner.equals(joined.getUUID())) {
+                continue;
             }
+
+            ServerPlayer owner = server.getPlayerList().getPlayer(state.owner);
+
+            if (owner != null && !mayKnow(owner, joined)) {
+                continue;
+            }
+
+            joined.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(state.owner)));
+            joined.connection.send(new ClientboundPlayerInfoUpdatePacket(
+                    ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, state.packetSource));
         }
     }
 
     public void shutdown(MinecraftServer server) {
         for (State state : List.copyOf(disguises.values())) {
-            ServerPlayer owner = server.getPlayerList().getPlayer(state.owner);
+            if (state.skin == null) {
+                ServerPlayer owner = server.getPlayerList().getPlayer(state.owner);
 
-            if (owner != null) {
-                owner.setInvisible(state.wasInvisible);
+                if (owner != null) {
+                    owner.setInvisible(state.wasInvisible);
+                }
             }
 
             drop(state);
@@ -211,6 +258,7 @@ public final class DisguiseManager {
 
         disguises.clear();
         entityOwners.clear();
+        pendingShow.clear();
     }
 
     // ==================== internals ====================
@@ -219,17 +267,92 @@ public final class DisguiseManager {
         undisguise(player);
 
         // Registered before spawning so the tracking mixin already hides the right entities
-        state.wasInvisible = player.isInvisible();
         disguises.put(state.owner, state);
 
-        if (!spawn(state, player)) {
+        boolean ok;
+
+        try {
+            ok = state.skin != null ? applyIdentity(state, player) : startEntity(state, player);
+        } catch (RuntimeException e) {
+            LOGGER.error("[Disguise] Could not start disguise for {}", player.getName().getString(), e);
+            ok = false;
+        }
+
+        if (!ok) {
             disguises.remove(state.owner);
+            pendingShow.remove(state.owner);
+            drop(state);
+            refreshTracking(player);
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean startEntity(State state, ServerPlayer player) {
+        state.wasInvisible = player.isInvisible();
+
+        if (!spawn(state, player)) {
             return false;
         }
 
         player.setInvisible(true);
         refreshTracking(player);
         return true;
+    }
+
+    /**
+     * Player disguise, step 1: swap the identity other clients know for this UUID and hide the real
+     * entity. Step 2 (a few ticks later, see {@link #tick}) shows it again so clients rebuild it.
+     */
+    private boolean applyIdentity(State state, ServerPlayer player) {
+        ServerLevel level = (ServerLevel) player.level();
+        MinecraftServer server = level.getServer();
+
+        // Same UUID as the real player (that's how clients match entity and identity), target's name + skin
+        GameProfile identity = new GameProfile(player.getUUID(), state.skin.name());
+        identity.properties().putAll(state.skin.properties());
+
+        // Only a packet source, never added to the world
+        state.packetSource = FakePlayer.get(level, identity);
+        state.refreshing = true;
+
+        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
+            if (other == player || !mayKnow(player, other)) {
+                continue;
+            }
+
+            other.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
+            other.connection.send(new ClientboundPlayerInfoUpdatePacket(
+                    ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, state.packetSource));
+        }
+
+        pendingShow.put(state.owner, server.getTickCount() + RESHOW_DELAY_TICKS);
+        refreshTracking(player); // hides the real entity from everybody else for now
+        return true;
+    }
+
+    /** Player disguise removal: hand everybody the real identity back and re-send the entity. */
+    private void restoreIdentity(ServerPlayer player) {
+        MinecraftServer server = player.level().getServer();
+
+        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
+            if (other == player || !mayKnow(player, other)) {
+                continue;
+            }
+
+            other.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
+            other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
+        }
+
+        pendingShow.put(player.getUUID(), server.getTickCount() + RESHOW_DELAY_TICKS);
+        refreshTracking(player);
+    }
+
+    /** Vanished players are unknown to viewers who may not see them: don't tell those anything. */
+    private static boolean mayKnow(ServerPlayer subject, ServerPlayer viewer) {
+        VanishManager vanish = VanishManager.getInstance();
+        return !(vanish.isVanished(subject) && !vanish.canSee(viewer));
     }
 
     private void release(UUID owner, ServerPlayer refresh) {
@@ -241,14 +364,24 @@ public final class DisguiseManager {
 
         drop(state);
 
-        if (refresh != null && !refresh.isRemoved()) {
+        if (refresh == null || refresh.isRemoved()) {
+            pendingShow.remove(owner);
+            return;
+        }
+
+        if (state.skin != null) {
+            restoreIdentity(refresh);
+        } else {
             refresh.setInvisible(state.wasInvisible);
             refreshTracking(refresh);
         }
     }
 
-    /** Removes the disguise entity of this state (and the hidden player-info entry for player disguises). */
+    /** Removes the disguise entity of this state (entity disguises only). */
     private void drop(State state) {
+        state.packetSource = null;
+        state.refreshing = false;
+
         Entity entity = state.entity;
         state.entity = null;
 
@@ -257,18 +390,12 @@ public final class DisguiseManager {
         }
 
         entityOwners.remove(entity.getUUID());
-
-        MinecraftServer server = entity.level().getServer();
         entity.discard();
-
-        if (entity instanceof ServerPlayer fake && server != null) {
-            sendInfoRemove(server, fake.getUUID());
-        }
     }
 
     private boolean spawn(State state, ServerPlayer player) {
         ServerLevel level = (ServerLevel) player.level();
-        Entity entity = createEntity(state, level);
+        Entity entity = state.type.create(level, EntitySpawnReason.COMMAND);
 
         if (entity == null) {
             return false;
@@ -277,36 +404,14 @@ public final class DisguiseManager {
         prepare(entity, player);
         entityOwners.put(entity.getUUID(), state.owner);
 
-        // Clients must know name + skin before the player entity reaches them
-        if (entity instanceof ServerPlayer fake) {
-            sendInfoAdd(level.getServer(), fake, player);
-        }
-
         if (!level.addFreshEntity(entity)) {
             entityOwners.remove(entity.getUUID());
-
-            if (entity instanceof ServerPlayer fake) {
-                sendInfoRemove(level.getServer(), fake.getUUID());
-            }
-
             entity.discard();
             return false;
         }
 
         state.entity = entity;
         return true;
-    }
-
-    private static Entity createEntity(State state, ServerLevel level) {
-        if (state.skin != null) {
-            // Fresh random UUID: never collides with a real player, and FakePlayer's cache can't hand
-            // back an instance that was already discarded
-            GameProfile fakeProfile = new GameProfile(UUID.randomUUID(), state.skin.name());
-            fakeProfile.properties().putAll(state.skin.properties());
-            return FakePlayer.get(level, fakeProfile);
-        }
-
-        return state.type.create(level, EntitySpawnReason.COMMAND);
     }
 
     private static void prepare(Entity entity, ServerPlayer player) {
@@ -348,61 +453,100 @@ public final class DisguiseManager {
     }
 
     private void tick(MinecraftServer server) {
+        if (!pendingShow.isEmpty()) {
+            tickPendingShow(server);
+        }
+
         if (disguises.isEmpty()) {
             return;
         }
 
         for (State state : List.copyOf(disguises.values())) {
-            ServerPlayer player = server.getPlayerList().getPlayer(state.owner);
+            try {
+                tickState(state, server);
+            } catch (RuntimeException e) {
+                // A broken disguise must never take the whole server down
+                LOGGER.error("[Disguise] Error while ticking a disguise, removing it", e);
+                disguises.remove(state.owner);
+                pendingShow.remove(state.owner);
 
-            if (player == null || player.isRemoved()) {
-                release(state.owner, null);
-                continue;
-            }
-
-            if (!player.isAlive()) {
-                release(state.owner, player);
-                continue;
-            }
-
-            if (player.isSpectator()) {
-                release(state.owner, player);
-                player.sendSystemMessage(Component.literal("§c✗ Your disguise was removed (spectator mode)"));
-                continue;
-            }
-
-            Entity disguise = state.entity;
-
-            if (disguise == null || disguise.isRemoved() || disguise.level() != player.level()) {
-                if (!rebuild(state, player, server)) {
-                    release(state.owner, player);
-                    player.sendSystemMessage(Component.literal("§c✗ Your disguise was removed (it could not be kept)"));
-                    continue;
+                try {
+                    drop(state);
+                } catch (RuntimeException ignored) {
+                    // nothing more we can do
                 }
-
-                // Hide the real player / new entity again for the new world
-                refreshTracking(player);
-                disguise = state.entity;
             }
-
-            if (!player.isInvisible()) {
-                player.setInvisible(true);
-            }
-
-            sync(state, disguise, player);
         }
     }
 
-    private static void sync(State state, Entity disguise, ServerPlayer player) {
+    private void tickPendingShow(MinecraftServer server) {
+        int now = server.getTickCount();
+
+        for (Map.Entry<UUID, Integer> entry : List.copyOf(pendingShow.entrySet())) {
+            if (now < entry.getValue()) {
+                continue;
+            }
+
+            pendingShow.remove(entry.getKey());
+
+            State state = disguises.get(entry.getKey());
+
+            if (state != null) {
+                state.refreshing = false;
+            }
+
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+
+            if (player != null && !player.isRemoved()) {
+                refreshTracking(player); // real entity is sent again, clients now know the new identity
+            }
+        }
+    }
+
+    private void tickState(State state, MinecraftServer server) {
+        ServerPlayer player = server.getPlayerList().getPlayer(state.owner);
+
+        if (player == null || player.isRemoved()) {
+            release(state.owner, null);
+            return;
+        }
+
+        if (!player.isAlive()) {
+            release(state.owner, player);
+            return;
+        }
+
+        if (state.skin != null) {
+            return; // player disguise: nothing to follow, the real entity is the disguise
+        }
+
+        if (player.isSpectator()) {
+            release(state.owner, player);
+            player.sendSystemMessage(Component.literal("§c✗ Your disguise was removed (spectator mode)"));
+            return;
+        }
+
+        Entity disguise = state.entity;
+
+        if (disguise == null || disguise.isRemoved() || disguise.level() != player.level()) {
+            if (!rebuild(state, player, server)) {
+                release(state.owner, player);
+                player.sendSystemMessage(Component.literal("§c✗ Your disguise was removed (it could not be kept)"));
+                return;
+            }
+
+            // Hide the real player / new entity again for the new world
+            refreshTracking(player);
+            disguise = state.entity;
+        }
+
+        if (!player.isInvisible()) {
+            player.setInvisible(true);
+        }
+
         moveToPlayer(disguise, player);
         disguise.setDeltaMovement(Vec3.ZERO);
         disguise.setOnGround(player.onGround());
-
-        if (state.skin != null) {
-            disguise.setPose(player.getPose());
-            disguise.setShiftKeyDown(player.isShiftKeyDown());
-            disguise.setSprinting(player.isSprinting());
-        }
     }
 
     private static void moveToPlayer(Entity entity, ServerPlayer player) {
@@ -419,25 +563,5 @@ public final class DisguiseManager {
     /** Re-evaluates who may see the player (same call vanish uses; doesn't reload chunks). */
     private static void refreshTracking(ServerPlayer player) {
         ((ServerLevel) player.level()).getChunkSource().move(player);
-    }
-
-    /** Hidden (unlisted) player-info entry: gives clients name + skin without showing a tab-list entry. */
-    private static void sendInfoAdd(MinecraftServer server, ServerPlayer fake, ServerPlayer owner) {
-        ClientboundPlayerInfoUpdatePacket packet = new ClientboundPlayerInfoUpdatePacket(
-                ClientboundPlayerInfoUpdatePacket.Action.ADD_PLAYER, fake);
-
-        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            if (other != owner) {
-                other.connection.send(packet);
-            }
-        }
-    }
-
-    private static void sendInfoRemove(MinecraftServer server, UUID fakeUuid) {
-        ClientboundPlayerInfoRemovePacket packet = new ClientboundPlayerInfoRemovePacket(List.of(fakeUuid));
-
-        for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            other.connection.send(packet);
-        }
     }
 }

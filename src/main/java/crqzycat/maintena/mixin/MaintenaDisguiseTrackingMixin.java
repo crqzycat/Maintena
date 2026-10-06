@@ -16,7 +16,7 @@ import java.util.UUID;
 /**
  * Decides per viewer what is sent for disguises:
  * <ul>
- *   <li>a disguised player is not sent to anybody else (they see the disguise entity instead),</li>
+ *   <li>a player whose body is replaced by a disguise entity is not sent to anybody else,</li>
  *   <li>the disguise entity is not sent to viewers who must not see its (vanished) owner.</li>
  * </ul>
  */
@@ -34,7 +34,7 @@ public abstract class MaintenaDisguiseTrackingMixin {
     private void maintena$hideDisguiseParts(ServerPlayer viewer, CallbackInfo ci) {
         DisguiseManager manager = DisguiseManager.getInstance();
 
-        if (this.entity instanceof ServerPlayer target && target != viewer && manager.isDisguised(target)) {
+        if (this.entity instanceof ServerPlayer target && target != viewer && manager.isHiddenFromOthers(target)) {
             this.removePlayer(viewer);
             ci.cancel();
             return;
