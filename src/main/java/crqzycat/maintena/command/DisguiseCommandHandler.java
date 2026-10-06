@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.CompletionException;
 
 /**
  * /disguise and /undisguise commands.
@@ -167,13 +168,18 @@ public final class DisguiseCommandHandler {
             }
 
             if (error != null) {
-                LOGGER.warn("[Disguise] Mojang lookup for '{}' failed: {}", name, String.valueOf(error.getMessage()));
+                Throwable cause = error instanceof CompletionException && error.getCause() != null
+                        ? error.getCause()
+                        : error;
+                String detail = cause.getClass().getSimpleName() + ": " + cause.getMessage();
+
+                LOGGER.warn("[Disguise] Mojang lookup for '{}' failed", name, cause);
 
                 if (fallback != null) {
                     applyProfile(current, fallback);
                 } else {
                     current.sendSystemMessage(Component.literal(
-                            "§c✗ Could not look up §f" + name + " §c(Mojang API not reachable or rate limited)"));
+                            "§c✗ Could not look up §f" + name + " §c(" + detail + ")"));
                 }
 
                 return;

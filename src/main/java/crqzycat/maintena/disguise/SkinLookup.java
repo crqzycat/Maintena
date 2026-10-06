@@ -8,11 +8,10 @@ import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -20,23 +19,40 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
 
 /**
  * Looks up the profile (canonical name + signed skin) of ANY Minecraft account by name, even if the
- * player never joined this server. Asks the Mojang API asynchronously (never blocks the server
- * thread) and caches results for a while, because the session server rate-limits profile requests.
+ * player never joined this server. Runs on a background thread (never blocks the server thread) and
+ * caches results for a while, because the session server rate-limits profile requests.
+ *
+ * <p>Uses plain {@link HttpURLConnection} (java.base) so it also works on trimmed Java runtimes that
+ * don't ship the {@code java.net.http} module.
  */
 public final class SkinLookup {
 
     private static final Pattern VALID_NAME = Pattern.compile("[A-Za-z0-9_]{1,16}");
     private static final long CACHE_MILLIS = 30L * 60L * 1000L;
 
-    private static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(5))
-            .build();
+    /** Tried in this order for name -> UUID. */
+    private static final String[] NAME_ENDPOINTS = {
+            "https://api.minecraftservices.com/minecraft/profile/lookup/name/",
+            "https://api.mojang.com/users/profiles/minecraft/"
+    };
+
+    private static final String PROFILE_ENDPOINT = "https://sessionserver.mojang.com/session/minecraft/profile/";
+
+    private static final Executor EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "Maintena-SkinLookup");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private record Cached(GameProfile profile, long time) {}
+
+    private record Response(int status, String body) {}
 
     private static final Map<String, Cached> CACHE = new ConcurrentHashMap<>();
 
@@ -49,7 +65,7 @@ public final class SkinLookup {
 
     /**
      * @return a future with the profile, or an empty Optional if no such account exists; completes
-     *         exceptionally if the Mojang API can't be reached (offline, rate limit, ...)
+     *         exceptionally (with a readable message) if Mojang can't be reached or rate-limits us
      */
     public static CompletableFuture<Optional<GameProfile>> lookup(String name) {
         if (!isValidName(name)) {
@@ -63,52 +79,85 @@ public final class SkinLookup {
             return CompletableFuture.completedFuture(Optional.of(cached.profile()));
         }
 
-        HttpRequest idRequest = HttpRequest.newBuilder(
-                        URI.create("https://api.mojang.com/users/profiles/minecraft/" + name))
-                .timeout(Duration.ofSeconds(8))
-                .GET()
-                .build();
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Optional<GameProfile> result = fetch(name);
+                result.ifPresent(profile -> CACHE.put(key, new Cached(profile, System.currentTimeMillis())));
+                return result;
+            } catch (IOException e) {
+                throw new CompletionException(e);
+            }
+        }, EXECUTOR);
+    }
 
-        return HTTP.sendAsync(idRequest, HttpResponse.BodyHandlers.ofString())
-                .thenCompose(response -> {
-                    int status = response.statusCode();
+    private static Optional<GameProfile> fetch(String name) throws IOException {
+        JsonObject idJson = null;
+        IOException lastError = null;
 
-                    if (status == 204 || status == 404) {
-                        return CompletableFuture.completedFuture(Optional.<GameProfile>empty());
-                    }
+        for (String endpoint : NAME_ENDPOINTS) {
+            try {
+                Response response = get(endpoint + name);
 
-                    if (status != 200) {
-                        return CompletableFuture.<Optional<GameProfile>>failedFuture(
-                                new IOException("Mojang API returned HTTP " + status));
-                    }
+                if (response.status() == 200) {
+                    idJson = JsonParser.parseString(response.body()).getAsJsonObject();
+                    break;
+                }
 
-                    JsonObject json = JsonParser.parseString(response.body()).getAsJsonObject();
-                    String undashed = json.get("id").getAsString();
-                    String realName = json.get("name").getAsString();
+                if (response.status() == 204 || response.status() == 404) {
+                    return Optional.empty(); // no such account
+                }
 
-                    HttpRequest profileRequest = HttpRequest.newBuilder(URI.create(
-                                    "https://sessionserver.mojang.com/session/minecraft/profile/"
-                                            + undashed + "?unsigned=false"))
-                            .timeout(Duration.ofSeconds(8))
-                            .GET()
-                            .build();
+                lastError = new IOException("HTTP " + response.status() + " from " + URI.create(endpoint).getHost());
+            } catch (IOException e) {
+                lastError = e;
+            }
+        }
 
-                    return HTTP.sendAsync(profileRequest, HttpResponse.BodyHandlers.ofString())
-                            .thenApply(profileResponse -> {
-                                if (profileResponse.statusCode() != 200) {
-                                    throw new CompletionException(new IOException(
-                                            "Session server returned HTTP " + profileResponse.statusCode()));
-                                }
+        if (idJson == null) {
+            throw lastError != null ? lastError : new IOException("no response from Mojang");
+        }
 
-                                GameProfile profile = parseProfile(
-                                        JsonParser.parseString(profileResponse.body()).getAsJsonObject(),
-                                        undashed,
-                                        realName);
+        String undashed = idJson.get("id").getAsString();
+        String realName = idJson.get("name").getAsString();
 
-                                CACHE.put(key, new Cached(profile, System.currentTimeMillis()));
-                                return Optional.of(profile);
-                            });
-                });
+        Response profileResponse = get(PROFILE_ENDPOINT + undashed + "?unsigned=false");
+
+        if (profileResponse.status() == 429) {
+            throw new IOException("rate limited by Mojang (HTTP 429), try again in a minute");
+        }
+
+        if (profileResponse.status() != 200) {
+            throw new IOException("HTTP " + profileResponse.status() + " from sessionserver.mojang.com");
+        }
+
+        return Optional.of(parseProfile(
+                JsonParser.parseString(profileResponse.body()).getAsJsonObject(), undashed, realName));
+    }
+
+    private static Response get(String url) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
+
+        try {
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(8000);
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("User-Agent", "Maintena/1.0");
+            connection.setRequestProperty("Accept", "application/json");
+
+            int status = connection.getResponseCode();
+            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
+            String body = "";
+
+            if (stream != null) {
+                try (stream) {
+                    body = new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+                }
+            }
+
+            return new Response(status, body);
+        } finally {
+            connection.disconnect();
+        }
     }
 
     private static GameProfile parseProfile(JsonObject json, String undashed, String fallbackName) {
