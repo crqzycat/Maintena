@@ -143,13 +143,22 @@ public final class DisguiseManager {
         return start(player, new State(player.getUUID(), type, null));
     }
 
-    /** Disguises the player as another player (name + skin). */
+    /** Disguises the player as another online player (name + skin). */
     public boolean disguisePlayer(ServerPlayer player, ServerPlayer target) {
         if (player == target) {
             return false;
         }
 
-        return start(player, new State(player.getUUID(), null, target.getGameProfile()));
+        return disguiseAsProfile(player, target.getGameProfile());
+    }
+
+    /** Disguises the player as any profile (name + skin), e.g. one from {@link SkinLookup}. */
+    public boolean disguiseAsProfile(ServerPlayer player, GameProfile profile) {
+        if (profile.id().equals(player.getUUID())) {
+            return false;
+        }
+
+        return start(player, new State(player.getUUID(), null, profile));
     }
 
     public boolean undisguise(ServerPlayer player) {
