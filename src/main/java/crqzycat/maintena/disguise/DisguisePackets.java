@@ -13,7 +13,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerGamePacketListenerImpl;
-import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.ArrayList;
@@ -114,7 +113,8 @@ public final class DisguisePackets {
         if (packet instanceof ClientboundAddEntityPacket add) {
             DisguiseManager.Morph morph = morphOf(manager, add.getId(), viewerId);
 
-            if (morph == null || add.getType() != EntityType.PLAYER) {
+            // Already announced as the morph type (e.g. rewritten before): leave it alone.
+            if (morph == null || add.getType() == morph.type()) {
                 return packet;
             }
 
