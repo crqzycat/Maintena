@@ -14,7 +14,10 @@
     "MaintenaPlayerWaypointMixin",
     "ServerCommonPacketListenerImplAccessor",
     "MaintenaDisguisePlayerMixin",
-    "MaintenaDisguiseTrackingMixin"
+    "MaintenaDisguiseTrackingMixin",
+    "MaintenaDisguiseSendMixin",
+    "MaintenaDisguiseGameSendMixin",
+    "MaintenaDisguiseDimensionsMixin"
   ],
   "injectors": {
     "defaultRequire": 1

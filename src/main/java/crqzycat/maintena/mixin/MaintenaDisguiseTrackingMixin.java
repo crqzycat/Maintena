@@ -1,7 +1,6 @@
 package crqzycat.maintena.mixin;
 
 import crqzycat.maintena.disguise.DisguiseManager;
-import crqzycat.maintena.vanish.VanishManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Final;
@@ -11,14 +10,11 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-import java.util.UUID;
-
 /**
- * Decides per viewer what is sent for disguises:
- * <ul>
- *   <li>a player whose body is replaced by a disguise entity is not sent to anybody else,</li>
- *   <li>the disguise entity is not sent to viewers who must not see its (vanished) owner.</li>
- * </ul>
+ * While a disguise is applied or removed, the real player entity is hidden from everybody else
+ * for a moment (DisguiseManager.isHiddenFromOthers). When it becomes visible again, clients
+ * receive a fresh spawn packet - with the new identity, or rewritten into the morph's entity type
+ * (see DisguisePackets).
  */
 @Mixin(targets = "net.minecraft.server.level.ChunkMap$TrackedEntity")
 public abstract class MaintenaDisguiseTrackingMixin {
@@ -31,29 +27,11 @@ public abstract class MaintenaDisguiseTrackingMixin {
     public abstract void removePlayer(ServerPlayer player);
 
     @Inject(method = "updatePlayer", at = @At("HEAD"), cancellable = true)
-    private void maintena$hideDisguiseParts(ServerPlayer viewer, CallbackInfo ci) {
-        DisguiseManager manager = DisguiseManager.getInstance();
+    private void maintena$hideWhileResending(ServerPlayer viewer, CallbackInfo ci) {
+        if (this.entity instanceof ServerPlayer target
+                && target != viewer
+                && DisguiseManager.getInstance().isHiddenFromOthers(target)) {
 
-        if (this.entity instanceof ServerPlayer target && target != viewer && manager.isHiddenFromOthers(target)) {
-            this.removePlayer(viewer);
-            ci.cancel();
-            return;
-        }
-
-        UUID ownerId = manager.getDisguiseOwner(this.entity);
-
-        if (ownerId == null) {
-            return;
-        }
-
-        if (ownerId.equals(viewer.getUUID())) {
-            return; // the owner sees his own disguise
-        }
-
-        ServerPlayer owner = viewer.level().getServer().getPlayerList().getPlayer(ownerId);
-        VanishManager vanish = VanishManager.getInstance();
-
-        if (owner != null && vanish.isVanished(owner) && !vanish.canSee(viewer)) {
             this.removePlayer(viewer);
             ci.cancel();
         }

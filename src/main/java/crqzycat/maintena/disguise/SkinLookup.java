@@ -1,11 +1,13 @@
 package crqzycat.maintena.disguise;
 
+import com.google.common.collect.ImmutableMultimap;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.GameProfile;
 import com.mojang.authlib.properties.Property;
+import com.mojang.authlib.properties.PropertyMap;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -162,22 +164,22 @@ public final class SkinLookup {
 
     private static GameProfile parseProfile(JsonObject json, String undashed, String fallbackName) {
         String name = json.has("name") ? json.get("name").getAsString() : fallbackName;
-        GameProfile profile = new GameProfile(parseUuid(undashed), name);
+
+        // GameProfile / PropertyMap are immutable: collect the properties first, then build.
+        ImmutableMultimap.Builder<String, Property> properties = ImmutableMultimap.builder();
 
         if (json.has("properties")) {
-            JsonArray properties = json.getAsJsonArray("properties");
-
-            for (JsonElement element : properties) {
+            for (JsonElement element : json.getAsJsonArray("properties")) {
                 JsonObject property = element.getAsJsonObject();
                 String propertyName = property.get("name").getAsString();
                 String value = property.get("value").getAsString();
                 String signature = property.has("signature") ? property.get("signature").getAsString() : null;
 
-                profile.properties().put(propertyName, new Property(propertyName, value, signature));
+                properties.put(propertyName, new Property(propertyName, value, signature));
             }
         }
 
-        return profile;
+        return new GameProfile(parseUuid(undashed), name, new PropertyMap(properties.build()));
     }
 
     private static UUID parseUuid(String undashed) {

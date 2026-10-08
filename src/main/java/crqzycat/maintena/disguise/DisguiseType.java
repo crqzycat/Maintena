@@ -22,6 +22,8 @@ public final class DisguiseType {
      *   <li>player, fishing_bobber, lightning_bolt: technical entities (use /disguise &lt;player&gt;)</li>
      *   <li>falling_block, painting, item_frame, glow_item_frame, leash_knot: turn into a block or drop
      *       an item every few seconds when they don't sit where they should</li>
+     *   <li>area_effect_cloud: the client removes it by itself when its duration runs out</li>
+     *   <li>ender_dragon: multipart entity, its parts take the ids right after the player's id on the client</li>
      * </ul>
      */
     private static final Set<String> BLOCKED = Set.of(
@@ -34,7 +36,9 @@ public final class DisguiseType {
             "minecraft:painting",
             "minecraft:item_frame",
             "minecraft:glow_item_frame",
-            "minecraft:leash_knot"
+            "minecraft:leash_knot",
+            "minecraft:area_effect_cloud",
+            "minecraft:ender_dragon"
     );
 
     private DisguiseType() {}
