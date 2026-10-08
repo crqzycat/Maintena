@@ -4,12 +4,14 @@ import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.announcement.AnnouncementSchedule;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.ban.IpBanManager;
+import crqzycat.maintena.disguise.DisguiseManager;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.mute.MuteManager;
 import crqzycat.maintena.vanish.VanishManager;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.EntityType;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.minecraft.commands.CommandSourceStack;
@@ -92,6 +94,7 @@ public final class SettingsGUI {
             case MUTE_LIST -> muteList();
             case MUTE_ENTRY -> muteEntry(arg);
             case VANISH -> vanish(a);
+            case DISGUISE -> disguise(a);
         };
     }
 
@@ -111,6 +114,7 @@ public final class SettingsGUI {
                 .open("IP bans", Page.IP_BAN)
                 .open("Mutes", Page.MUTE)
                 .open("Vanish", Page.VANISH)
+                .open("Disguise", Page.DISGUISE)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -527,6 +531,40 @@ public final class SettingsGUI {
                 .button("Vanish", "vanish on")
                 .button("Become visible", "vanish off")
                 .button("Show vanished players (chat)", "vanish list")
+                .back(Page.MAIN)
+                .build();
+    }
+
+    // ==================== Disguise ====================
+
+    private static Dialog disguise(CommandSourceStack a) {
+        ServerPlayer self = a.getPlayer();
+        DisguiseManager manager = DisguiseManager.getInstance();
+        String status = "§7You are not disguised.";
+
+        if (self != null) {
+            String playerName = manager.getPlayerDisguiseName(self);
+            EntityType<?> type = manager.getDisguiseType(self);
+
+            if (playerName != null) {
+                status = "§bYou are disguised as player §f" + playerName;
+            } else if (type != null) {
+                status = "§bYou are disguised as §f" + type.getDescription().getString();
+            }
+        }
+
+        int total = manager.describeAll().size();
+
+        return new Builder("§6Disguise", Page.DISGUISE, null)
+                .text(status)
+                .text("§7Enter a player name (any Minecraft account) or an entity id, e.g. Notch or zombie. "
+                        + "Use player:<name> if a name equals an entity id. Currently disguised: " + total)
+                .textInput("target", "Player or entity", "", 48)
+                .button("Disguise", "disguise $(target)")
+                .button("Remove disguise", "undisguise")
+                .button("Show my disguise (chat)", "disguise status")
+                .button("Show disguised players (chat)", "disguise list")
+                .open("Refresh", Page.DISGUISE)
                 .back(Page.MAIN)
                 .build();
     }

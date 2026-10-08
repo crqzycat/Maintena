@@ -44,6 +44,7 @@ import java.util.List;
  * /maintena ipban         IP-Ban-Menü
  * /maintena mute          Mute-Menü (Chat-Timeouts)
  * /maintena vanish        Vanish-Menü
+ * /maintena disguise      Disguise-Menü (auch /maintena undisguise)
  */
 public class MaintenaCommandHandler {
 
@@ -116,6 +117,9 @@ public class MaintenaCommandHandler {
 
                 // /maintena vanish ... (identisch zu /vanish, ohne Argumente öffnet sich das Menü)
                 .then(VanishCommandHandler.buildVanishTree("vanish").executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.VANISH)))
+
+                // /maintena disguise|undisguise ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
+                .then(DisguiseCommandHandler.buildDisguiseTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.DISGUISE))).then(DisguiseCommandHandler.buildUndisguiseTree())
 
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
