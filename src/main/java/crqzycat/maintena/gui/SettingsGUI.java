@@ -5,6 +5,7 @@ import crqzycat.maintena.announcement.AnnouncementSchedule;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.ban.IpBanManager;
 import crqzycat.maintena.disguise.DisguiseManager;
+import crqzycat.maintena.freeze.FreezeManager;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.mute.MuteData;
@@ -95,6 +96,9 @@ public final class SettingsGUI {
             case MUTE_ENTRY -> muteEntry(arg);
             case VANISH -> vanish(a);
             case DISGUISE -> disguise(a);
+            case FREEZE -> freeze();
+            case FREEZE_LIST -> freezeList();
+            case FREEZE_ENTRY -> freezeEntry(a, arg);
         };
     }
 
@@ -115,6 +119,7 @@ public final class SettingsGUI {
                 .open("Mutes", Page.MUTE)
                 .open("Vanish", Page.VANISH)
                 .open("Disguise", Page.DISGUISE)
+                .open("Freeze", Page.FREEZE)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -566,6 +571,70 @@ public final class SettingsGUI {
                 .button("Show disguised players (chat)", "disguise list")
                 .open("Refresh", Page.DISGUISE)
                 .back(Page.MAIN)
+                .build();
+    }
+
+    // ==================== Freeze ====================
+
+    private static Dialog freeze() {
+        int count = FreezeManager.getInstance().getFrozen().size();
+
+        return new Builder("§6Freeze", Page.FREEZE, null)
+                .text("§7Frozen players can't move or interact with the world (blocks, items, entities). "
+                        + "They get instructions on their screen and keep the freeze when they re-join. Currently frozen: " + count)
+                .textInput("player", "Player name (must be online)", "", 16)
+                .textInput("reason", "Reason (optional)", "", 128)
+                .button("Freeze", "freeze $(player) $(reason)")
+                .button("Unfreeze", "unfreeze $(player)")
+                .open("Frozen players (" + count + ")", Page.FREEZE_LIST)
+                .button("Show frozen players (chat)", "freeze list")
+                .back(Page.MAIN)
+                .build();
+    }
+
+    private static Dialog freezeList() {
+        List<String> frozen = FreezeManager.getInstance().getFrozen()
+                .stream()
+                .map(entry -> entry.name)
+                .toList();
+
+        Builder b = new Builder("§6Frozen players", Page.FREEZE_LIST, null)
+                .text(frozen.isEmpty() ? "§7Nobody is frozen." : "§7Click a player to manage them.");
+
+        for (String name : frozen) {
+            b.open(name, Page.FREEZE_ENTRY, name);
+        }
+
+        if (!frozen.isEmpty()) {
+            b.buttonThen("Unfreeze everyone", "unfreeze all", Page.FREEZE_LIST, null);
+        }
+
+        return b.back(Page.FREEZE).build();
+    }
+
+    private static Dialog freezeEntry(CommandSourceStack a, String name) {
+        FreezeManager manager = FreezeManager.getInstance();
+        FreezeManager.Entry entry = manager.findByName(name);
+
+        Builder b = new Builder("§6" + name, Page.FREEZE_ENTRY, name);
+
+        if (entry == null) {
+            return b.text("§cThis player is not frozen (anymore).")
+                    .back(Page.FREEZE_LIST)
+                    .build();
+        }
+
+        boolean online = a.getServer().getPlayerList().getPlayer(entry.id) != null;
+
+        b.text("§7Frozen by §f" + entry.source + " §7on §f" + manager.describeSince(entry)
+                + (online ? "" : " §c(offline)"));
+
+        if (entry.reason != null && !entry.reason.isBlank()) {
+            b.text("§7Reason: §f" + entry.reason);
+        }
+
+        return b.buttonThen("Unfreeze", "unfreeze " + name, Page.FREEZE_LIST, null)
+                .back(Page.FREEZE_LIST)
                 .build();
     }
 

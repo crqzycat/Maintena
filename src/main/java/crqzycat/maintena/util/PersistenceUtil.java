@@ -7,6 +7,7 @@ import com.google.gson.JsonArray;
 import crqzycat.maintena.announcement.AnnouncementData;
 import crqzycat.maintena.ban.BanConfig;
 import crqzycat.maintena.maintenance.MaintenanceData;
+import crqzycat.maintena.freeze.FreezeConfig;
 import crqzycat.maintena.mute.MuteConfig;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.restart.RestartData;
@@ -31,6 +32,7 @@ public class PersistenceUtil {
     private static final File BAN_CONFIG_FILE = CONFIG_DIR.resolve("ban-config.json").toFile();
     private static final File MUTE_DATA_FILE = CONFIG_DIR.resolve("mutes.json").toFile();
     private static final File MUTE_CONFIG_FILE = CONFIG_DIR.resolve("mute-config.json").toFile();
+    private static final File FREEZE_CONFIG_FILE = CONFIG_DIR.resolve("freeze-config.json").toFile();
     
     static {
         try {
@@ -358,6 +360,47 @@ public class PersistenceUtil {
         } catch (IOException e) {
             e.printStackTrace();
             return new MuteConfig();
+        }
+    }
+
+    // ==================== Freeze ====================
+
+    public static void saveFreezeConfig(FreezeConfig config) {
+        try {
+            if (!FREEZE_CONFIG_FILE.exists()) {
+                FREEZE_CONFIG_FILE.createNewFile();
+            }
+
+            try (FileWriter writer = new FileWriter(FREEZE_CONFIG_FILE)) {
+                GSON.toJson(config, writer);
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static FreezeConfig loadFreezeConfig() {
+        if (!FREEZE_CONFIG_FILE.exists()) {
+            FreezeConfig config = new FreezeConfig();
+            saveFreezeConfig(config); // Create default config
+            return config;
+        }
+
+        try (FileReader reader = new FileReader(FREEZE_CONFIG_FILE)) {
+            FreezeConfig config = GSON.fromJson(reader, FreezeConfig.class);
+
+            if (config == null) {
+                return new FreezeConfig();
+            }
+
+            if (config.instructions == null) {
+                config.instructions = new FreezeConfig().instructions;
+            }
+
+            return config;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new FreezeConfig();
         }
     }
 }

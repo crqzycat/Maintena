@@ -8,6 +8,7 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import crqzycat.maintena.announcement.AnnouncementManager;
 import crqzycat.maintena.ban.BanManager;
+import crqzycat.maintena.freeze.FreezeManager;
 import crqzycat.maintena.gui.SettingsGUIHandler;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.mute.MuteManager;
@@ -45,6 +46,7 @@ import java.util.List;
  * /maintena mute          Mute-Menü (Chat-Timeouts)
  * /maintena vanish        Vanish-Menü
  * /maintena disguise      Disguise-Menü (auch /maintena undisguise)
+ * /maintena freeze        Freeze-Menü (auch /maintena unfreeze)
  */
 public class MaintenaCommandHandler {
 
@@ -97,6 +99,7 @@ public class MaintenaCommandHandler {
                     AnnouncementManager.getInstance().reload();
                     BanManager.getInstance().reload();
                     MuteManager.getInstance().reload();
+                    FreezeManager.getInstance().reload();
 
                     ctx.getSource().sendSuccess(() -> Component.literal("§a✓ Maintena config reloaded"), true);
 
@@ -120,6 +123,9 @@ public class MaintenaCommandHandler {
 
                 // /maintena disguise|undisguise ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
                 .then(DisguiseCommandHandler.buildDisguiseTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.DISGUISE))).then(DisguiseCommandHandler.buildUndisguiseTree())
+
+                // /maintena freeze|unfreeze ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
+                .then(FreezeCommandHandler.buildFreezeTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.FREEZE))).then(FreezeCommandHandler.buildUnfreezeTree())
 
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
@@ -153,6 +159,10 @@ public class MaintenaCommandHandler {
 
         dispatcher.register(DisguiseCommandHandler.buildDisguiseTree());
         dispatcher.register(DisguiseCommandHandler.buildUndisguiseTree());
+
+        // Eigenständige Freeze-Befehle, funktional identisch zu /maintena freeze|unfreeze
+        dispatcher.register(FreezeCommandHandler.buildFreezeTree());
+        dispatcher.register(FreezeCommandHandler.buildUnfreezeTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

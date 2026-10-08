@@ -18,7 +18,8 @@
     "MaintenaDisguiseSendMixin",
     "MaintenaDisguiseGameSendMixin",
     "MaintenaDisguiseDimensionsMixin",
-    "MaintenaDisguiseChatMixin"
+    "MaintenaDisguiseChatMixin",
+    "MaintenaFreezeMoveMixin"
   ],
   "injectors": {
     "defaultRequire": 1

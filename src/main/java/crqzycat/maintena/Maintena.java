@@ -12,6 +12,7 @@ import crqzycat.maintena.command.MaintenaCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
 import crqzycat.maintena.event.ChatMuteHandler;
 import crqzycat.maintena.event.VanishHandler;
+import crqzycat.maintena.event.FreezeHandler;
 
 public class Maintena implements ModInitializer {
 
@@ -29,6 +30,9 @@ public class Maintena implements ModInitializer {
 
         // Register vanish handler (tab list fix on join, actionbar hint)
         VanishHandler.register();
+
+        // Register freeze handler (blocks interactions, resets movement attempts, actionbar hint)
+        FreezeHandler.register();
 
         DisguiseManager.getInstance().initialize();
         DisguiseHandler.register();
