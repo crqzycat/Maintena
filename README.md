@@ -9,7 +9,7 @@ This document provides an overview of the planned administration and moderation 
 | **Chat Timeouts** | Moderation     | Temporarily restricts players from sending chat messages. | High | ✅ Implemented |
 | **Vanish** | Administration | Makes staff members invisible to regular players. | High | ✅ Implemented |
 | **Disguise** | Administration | Allows staff to disguise as another mob or player. | Medium | ✅ Implemented |
-| **Freeze** | Moderation     | Immobilizes a player in place (e.g., during suspected hacking). | High | ⏳ Planned |
+| **Freeze** | Moderation     | Immobilizes a player in place (e.g., during suspected hacking). | High | ✅ Implemented |
 | **Nicknames** | Administration | Allows staff to change the name shown to other players to hide their identity. | Medium | ⏳ Planned |
 
 ## 🛠️ Detailed Feature Breakdown
@@ -56,13 +56,21 @@ This document provides an overview of the planned administration and moderation 
   * Also available in the settings menu (`/maintena disguise`).
 * **Known limitations:** you still see yourself as a normal player, the real "left the game" message when a disguised player disconnects still appears, and item and experience orbs, paintings, item frames, leash knots, falling blocks, fishing bobbers, lightning bolts, area effect clouds and the ender dragon can't be used. A disguise ends on death or disconnect and is not saved across restarts.
 
-### 4. Freeze
+### 4. Freeze ✅
 
 * **Goal:** Lock players in place who are suspected of using unauthorized mods or cheats.
-* **Suggested Commands:** `/freeze <player>`, `/unfreeze <player>`
+* **Commands:** `/freeze <player> [reason]`, `/freeze list`, `/unfreeze <player>`, `/unfreeze all`
 * **Features:**
-  * Prevents movement, interactions, and optionally chat input.
-  * Displays instructions to the frozen player (e.g., to join Discord support).
+  * Prevents movement: the server holds the position and resets every attempt to move. Looking around still works.
+  * Prevents interactions: breaking and using blocks, using items, and interacting with or attacking entities. Frozen players are removed from vehicles.
+  * Optionally blocks chat as well as `/msg`, `/tell`, `/w`, `/me`, `/say` and `/teammsg` (off by default).
+  * Displays instructions to the frozen player: a title, chat lines with the reason and a Discord hint (shown again after every re-join), and a regular actionbar reminder.
+  * Frozen players take no damage (configurable).
+  * The freeze is kept on re-join, but reset on server restart. Operators are notified when a frozen player logs out or joins again.
+  * Safety checks: you can't freeze yourself, and operators can only be frozen from the console.
+  * Texts and options are configurable in `config/maintena/freeze-config.json`.
+  * Also available in the settings menu (`/maintena freeze`).
+* **Known limitations:** commands of other mods (like `/home` or `/spawn`) are not blocked, the inventory is not locked, and if the server moves a frozen player, the new position becomes the new freeze point.
 
 ### 5. Nicknames
 
