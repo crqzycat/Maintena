@@ -1,5 +1,6 @@
 package crqzycat.maintena.mixin;
 
+import crqzycat.maintena.disguise.DisguiseManager;
 import crqzycat.maintena.vanish.VanishManager;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,7 +23,8 @@ public abstract class MaintenaPlayerWaypointMixin {
         ServerPlayer self = (ServerPlayer) (Object) this;
         VanishManager manager = VanishManager.getInstance();
 
-        if (manager.isVanished(self) && !manager.canSee(receiver)) {
+        if (DisguiseManager.getInstance().isMorphed(self)
+                || (manager.isVanished(self) && !manager.canSee(receiver))) {
             cir.setReturnValue(Optional.empty());
         }
     }

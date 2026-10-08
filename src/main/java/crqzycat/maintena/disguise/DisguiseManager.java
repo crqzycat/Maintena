@@ -5,6 +5,8 @@ import crqzycat.maintena.vanish.VanishManager;
 import net.fabricmc.fabric.api.entity.FakePlayer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.RemoteChatSession;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
@@ -12,6 +14,7 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.waypoints.ServerWaypointManager;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffects;
@@ -23,6 +26,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.waypoints.WaypointTransmitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,6 +34,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -103,6 +108,12 @@ public final class DisguiseManager {
     /** Owner UUID -> server tick at which the real entity is shown again. */
     private final Map<UUID, Integer> reshowAt = new ConcurrentHashMap<>();
 
+    /** Morphed players who are removed from everybody's tab list (they "left the game"). */
+    private final Set<UUID> tabHidden = ConcurrentHashMap.newKeySet();
+
+    /** Owner UUID -> the tracker of his entity (hide / show it on purpose). */
+    private final Map<UUID, DisguiseTracker> trackers = new ConcurrentHashMap<>();
+
     private int hookCheckAt;
 
     private DisguiseManager() {
@@ -131,6 +142,23 @@ public final class DisguiseManager {
     /** Morph of the player entity with this id, or null. */
     public Morph getMorph(int entityId) {
         return morphs.isEmpty() ? null : morphs.get(entityId);
+    }
+
+    /** Is this player morphed into a non-player entity? */
+    public boolean isMorphed(ServerPlayer player) {
+        return !morphs.isEmpty() && morphs.containsKey(player.getId());
+    }
+
+    /** Is this player removed from the tab list because of a morph? */
+    public boolean isHiddenFromTab(UUID id) {
+        return !tabHidden.isEmpty() && tabHidden.contains(id);
+    }
+
+    /** Called by the tracking mixin whenever a player entity gets tracked. */
+    public void registerTracker(UUID owner, DisguiseTracker tracker) {
+        if (trackers.get(owner) != tracker) {
+            trackers.put(owner, tracker);
+        }
     }
 
     /** Must the real player entity be hidden from everybody else right now? */
@@ -211,6 +239,8 @@ public final class DisguiseManager {
     /** Called when a player disconnects. */
     public void onDisconnect(ServerPlayer player) {
         release(player.getUUID(), null);
+        trackers.remove(player.getUUID());
+        tabHidden.remove(player.getUUID());
     }
 
     /** Called when a player joins. */
@@ -225,6 +255,15 @@ public final class DisguiseManager {
         }
 
         MinecraftServer server = joined.level().getServer();
+
+        // Vanilla sends the complete tab list on join: remove the morphed players again
+        for (UUID hiddenId : tabHidden) {
+            ServerPlayer hidden = server.getPlayerList().getPlayer(hiddenId);
+
+            if (hidden != null && hidden != joined && mayKnow(hidden, joined)) {
+                joined.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(hiddenId)));
+            }
+        }
 
         // New viewers must learn the fake identities (entity morphs need nothing: the spawn
         // packet is rewritten on its way out).
@@ -252,6 +291,8 @@ public final class DisguiseManager {
         disguises.clear();
         morphs.clear();
         reshowAt.clear();
+        tabHidden.clear();
+        trackers.clear();
     }
 
     // ==================== internals ====================
@@ -262,7 +303,8 @@ public final class DisguiseManager {
         State old = disguises.remove(state.owner);
 
         if (old != null) {
-            teardown(old, player);
+            // morph -> morph keeps the player "gone" from tab list / locator bar: no join/leave spam
+            teardown(old, player, state.type != null);
         }
 
         // Register before anything is sent so the packet hook already knows the morph.
@@ -283,7 +325,7 @@ public final class DisguiseManager {
 
         if (!ok) {
             disguises.remove(state.owner);
-            teardown(state, player);
+            teardown(state, player, false);
             reshow(player);
             return false;
         }
@@ -331,6 +373,8 @@ public final class DisguiseManager {
         morphs.put(state.morphEntityId, state.morph);
 
         player.refreshDimensions(); // hitbox of the morph, see MaintenaDisguiseDimensionsMixin
+        hideFromTab(player);        // a mob is not a player: "left the game", no tab entry
+        refreshWaypoint(player);    // ... and no locator bar entry
         reshow(player);
 
         if (!DisguisePackets.isHookActive()) {
@@ -392,25 +436,78 @@ public final class DisguiseManager {
     }
 
     /** Removes everything a disguise changed, without sending the entity again. */
-    private void teardown(State state, ServerPlayer player) {
+    private void teardown(State state, ServerPlayer player, boolean keepMorphHidden) {
+
+        boolean online = player != null && !player.isRemoved();
 
         if (state.morphEntityId >= 0) {
             morphs.remove(state.morphEntityId);
             state.morphEntityId = -1;
             state.morph = null;
 
-            if (player != null && !player.isRemoved()) {
+            if (online) {
                 player.refreshDimensions(); // normal hitbox again
+
+                if (!keepMorphHidden) {
+                    showInTab(player);      // "joined the game", tab entry back
+                    refreshWaypoint(player);
+                }
+            } else {
+                tabHidden.remove(state.owner);
             }
         }
 
         if (state.packetSource != null) {
             state.packetSource = null;
 
-            if (player != null && !player.isRemoved()) {
+            if (online) {
                 broadcastIdentity(player, player); // real name and skin again
             }
         }
+    }
+
+    /** Tab list + chat: the player "left the game" (same messages as vanish). */
+    private void hideFromTab(ServerPlayer player) {
+        if (tabHidden.add(player.getUUID())) {
+            announce(player, false);
+        }
+    }
+
+    private void showInTab(ServerPlayer player) {
+        if (tabHidden.remove(player.getUUID())) {
+            announce(player, true);
+        }
+    }
+
+    private void announce(ServerPlayer player, boolean joined) {
+        Component message = Component.translatable(
+                joined ? "multiplayer.player.joined" : "multiplayer.player.left",
+                player.getDisplayName()
+        ).withStyle(ChatFormatting.YELLOW);
+
+        for (ServerPlayer other : player.level().getServer().getPlayerList().getPlayers()) {
+
+            if (other == player || !mayKnow(player, other)) {
+                continue;
+            }
+
+            if (joined) {
+                other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
+            } else {
+                other.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
+            }
+
+            other.sendSystemMessage(message);
+        }
+    }
+
+    /** Locator bar: rebuild the waypoint, the waypoint mixins decide whether it exists. */
+    private static void refreshWaypoint(ServerPlayer player) {
+        ServerWaypointManager waypoints = ((ServerLevel) player.level()).getWaypointManager();
+        WaypointTransmitter transmitter = player;
+
+        waypoints.untrackWaypoint(transmitter);
+        waypoints.trackWaypoint(transmitter);
     }
 
     private void release(UUID owner, ServerPlayer refresh) {
@@ -423,7 +520,7 @@ public final class DisguiseManager {
 
         boolean online = refresh != null && !refresh.isRemoved();
 
-        teardown(state, online ? refresh : null);
+        teardown(state, online ? refresh : null, false);
 
         if (!online) {
             reshowAt.remove(owner);
@@ -439,7 +536,7 @@ public final class DisguiseManager {
      */
     private void reshow(ServerPlayer player) {
         reshowAt.put(player.getUUID(), player.level().getServer().getTickCount() + RESHOW_DELAY_TICKS);
-        refreshTracking(player);
+        hideEntity(player);
     }
 
     /** Vanished players are unknown to viewers who may not see them. */
@@ -503,7 +600,7 @@ public final class DisguiseManager {
             ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
 
             if (player != null && !player.isRemoved()) {
-                refreshTracking(player);
+                showEntity(player);
             }
         }
     }
@@ -543,7 +640,29 @@ public final class DisguiseManager {
         }
     }
 
-    /** Re-evaluates who may see the player. */
+    /** Removes the player entity from every viewer (its own tracker, not dependent on anybody moving). */
+    private void hideEntity(ServerPlayer player) {
+        DisguiseTracker tracker = trackers.get(player.getUUID());
+
+        if (tracker != null) {
+            tracker.maintena$hide(List.copyOf(((ServerLevel) player.level()).players()));
+        } else {
+            refreshTracking(player);
+        }
+    }
+
+    /** Lets every viewer in range receive a fresh spawn of the player entity. */
+    private void showEntity(ServerPlayer player) {
+        DisguiseTracker tracker = trackers.get(player.getUUID());
+
+        if (tracker != null) {
+            tracker.maintena$show(List.copyOf(((ServerLevel) player.level()).players()));
+        } else {
+            refreshTracking(player);
+        }
+    }
+
+    /** Fallback if no tracker is known: re-evaluates tracking the vanilla way. */
     private static void refreshTracking(ServerPlayer player) {
         ((ServerLevel) player.level()).getChunkSource().move(player);
     }
