@@ -92,6 +92,9 @@ public final class DisguiseManager {
 
         int ambientTime = -80;
 
+        /** Player disguise: was a fake "joined the game" shown? (then undisguising shows "left") */
+        boolean announced;
+
         State(UUID owner, EntityType<?> type, GameProfile skin) {
             this.owner = owner;
             this.type = type;
@@ -413,6 +416,13 @@ public final class DisguiseManager {
         broadcastIdentity(player, state.packetSource);
         reshow(player);
 
+        // The "new" player joins - unless the impersonated account is online right now,
+        // then a join message would make no sense.
+        if (!isOnline(player, state.skin)) {
+            state.announced = true;
+            announceFake(player, state.skin.name(), true);
+        }
+
         return true;
     }
 
@@ -462,7 +472,13 @@ public final class DisguiseManager {
 
             if (online) {
                 broadcastIdentity(player, player); // real name and skin again
+
+                if (state.announced) {
+                    announceFake(player, state.skin.name(), false);
+                }
             }
+
+            state.announced = false;
         }
     }
 
@@ -498,6 +514,29 @@ public final class DisguiseManager {
             }
 
             other.sendSystemMessage(message);
+        }
+    }
+
+    /** Is the account behind this profile currently on the server? */
+    private static boolean isOnline(ServerPlayer self, GameProfile profile) {
+        var players = self.level().getServer().getPlayerList();
+        ServerPlayer byId = players.getPlayer(profile.id());
+        ServerPlayer byName = players.getPlayerByName(profile.name());
+
+        return (byId != null && byId != self) || (byName != null && byName != self);
+    }
+
+    /** "Name joined/left the game" for a disguise identity. The tab list is handled by the identity swap. */
+    private void announceFake(ServerPlayer player, String name, boolean joined) {
+        Component message = Component.translatable(
+                joined ? "multiplayer.player.joined" : "multiplayer.player.left",
+                Component.literal(name)
+        ).withStyle(ChatFormatting.YELLOW);
+
+        for (ServerPlayer other : player.level().getServer().getPlayerList().getPlayers()) {
+            if (other != player && mayKnow(player, other)) {
+                other.sendSystemMessage(message);
+            }
         }
     }
 
