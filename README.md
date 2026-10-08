@@ -4,12 +4,13 @@ This document provides an overview of the planned administration and moderation 
 
 ## 📋 Overview
 
-| Feature | Category              | Description | Priority | Status |
-| :--- |:----------------------| :--- | :--- | :--- |
-| **Chat Timeouts** | Moderation            | Temporarily restricts players from sending chat messages. | High | ✅ Implemented |
-| **Vanish** | Administration        | Makes staff members invisible to regular players. | High | ✅ Implemented |
-| **Disguise** | Administration /disguise | Allows players/staff to disguise as another mob or player. | Medium | ⏳ Planned |
-| **Freeze** | Moderation            | Immobilizes a player in place (e.g., during suspected hacking). | High | ⏳ Planned |
+| Feature | Category       | Description | Priority | Status |
+| :--- |:---------------| :--- | :--- | :--- |
+| **Chat Timeouts** | Moderation     | Temporarily restricts players from sending chat messages. | High | ✅ Implemented |
+| **Vanish** | Administration | Makes staff members invisible to regular players. | High | ✅ Implemented |
+| **Disguise** | Administration | Allows staff to disguise as another mob or player. | Medium | ✅ Implemented |
+| **Freeze** | Moderation     | Immobilizes a player in place (e.g., during suspected hacking). | High | ⏳ Planned |
+| **Nicknames** | Administration | Allows staff to change the name shown to other players to hide their identity. | Medium | ⏳ Planned |
 
 ## 🛠️ Detailed Feature Breakdown
 
@@ -38,13 +39,22 @@ This document provides an overview of the planned administration and moderation 
   * Also available in the settings menu (`/maintena vanish`).
 * **Known limitations:** the real join/leave messages when a vanished player actually disconnects or reconnects, `/list`, the server-list player count and tab-completion of names still reveal a vanished player.
 
-### 3. Disguise
+### 3. Disguise ✅
 
 * **Goal:** Transform into an entity, mob, or another player for testing, events, or moderation.
-* **Suggested Commands:** `/disguise <entity/player>`, `/undisguise`
+* **Commands:** `/disguise <player|entity>`, `/disguise player:<name>`, `/disguise status`, `/disguise list`, `/undisguise`
 * **Features:**
-  * Adjusts hitbox and animations to match the chosen entity.
-  * Permission-based access to specific disguises.
+  * Disguise as any Minecraft account, online or not (offline accounts are looked up at Mojang). Name and skin are replaced in the world, the tab list and the chat, with the team formatting of the imitated name.
+  * Disguise as any mob, boss, vehicle, projectile or display entity. The disguise works on the real player: hits, damage and knockback still land on you and you keep moving like a player, even as a boat.
+  * Sneaking, sprinting, swimming, burning and glowing are shown on the entity. Held items and armor are shown on mobs that can wear them.
+  * Hitbox shrinks to fit the entity (never larger than the player's), hurt, death and idle sounds are those of the entity.
+  * Fake "joined the game" / "left the game" messages when disguising and undisguising.
+  * As an entity the staff member is removed from the tab list and the locator bar; chat messages are shown as normal chat lines.
+  * Disguises are applied and removed live, without rejoining.
+  * Name suggestions for online players, everybody who has been on the server before, and all entity IDs.
+  * Every disguise and undisguise is written to the server log.
+  * Also available in the settings menu (`/maintena disguise`).
+* **Known limitations:** you still see yourself as a normal player, the real "left the game" message when a disguised player disconnects still appears, and item and experience orbs, paintings, item frames, leash knots, falling blocks, fishing bobbers, lightning bolts, area effect clouds and the ender dragon can't be used. A disguise ends on death or disconnect and is not saved across restarts.
 
 ### 4. Freeze
 
@@ -53,3 +63,16 @@ This document provides an overview of the planned administration and moderation 
 * **Features:**
   * Prevents movement, interactions, and optionally chat input.
   * Displays instructions to the frozen player (e.g., to join Discord support).
+
+### 5. Nicknames
+
+* **Goal:** Let staff change the name other players see (player tag) to hide their identity a little, without changing the real account name.
+* **Suggested Commands:** `/nick <name>`, `/nick reset`
+* **Features:**
+  * Staff only (gamemaster permission).
+  * Replaces the name above the head, in the tab list and in the chat.
+  * Not persistent: a nickname is removed on disconnect and on server restart, so it is gone after a re-join.
+  * Name checks: length limit, allowed characters, and no names of existing players.
+  * Optional color codes in nicknames.
+  * Every nickname change is written to the server log.
+  * Also available in the settings menu (`/maintena nick`).
