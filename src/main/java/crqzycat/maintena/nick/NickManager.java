@@ -6,6 +6,8 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Map;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -64,5 +66,10 @@ public final class NickManager {
 
     public String get(ServerPlayer player) {
         return DisguiseManager.getInstance().getNickname(player);
+    }
+
+    /** Spieler-UUID -> Nickname aller aktuellen Nicknames. */
+    public Map<UUID, String> all() {
+        return DisguiseManager.getInstance().nicknames();
     }
 }

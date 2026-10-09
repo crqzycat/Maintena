@@ -287,6 +287,19 @@ public final class DisguiseManager {
         return state != null && state.nick ? state.skin.name() : null;
     }
 
+    /** Owner UUID -> nickname of everybody who has one. */
+    public Map<UUID, String> nicknames() {
+        Map<UUID, String> result = new LinkedHashMap<>();
+
+        for (State state : disguises.values()) {
+            if (state.nick) {
+                result.put(state.owner, state.skin.name());
+            }
+        }
+
+        return result;
+    }
+
     /** Called when a player disconnects. */
     public void onDisconnect(ServerPlayer player) {
         release(player.getUUID(), null);

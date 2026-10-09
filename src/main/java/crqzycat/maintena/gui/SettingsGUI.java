@@ -592,6 +592,8 @@ public final class SettingsGUI {
                 .textInput("nickname", "Nickname", "", 16)
                 .button("Set nickname", "nick $(nickname)")
                 .button("Remove nickname", "unnick")
+                .button("Show my nickname (chat)", "nick status")
+                .button("Show nicknames (chat)", "nick list")
                 .back(Page.MAIN)
                 .build();
     }
