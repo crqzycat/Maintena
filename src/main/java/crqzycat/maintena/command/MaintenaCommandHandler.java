@@ -47,6 +47,7 @@ import java.util.List;
  * /maintena vanish        Vanish-Menü
  * /maintena disguise      Disguise-Menü (auch /maintena undisguise)
  * /maintena freeze        Freeze-Menü (auch /maintena unfreeze)
+ * /maintena nick          Nick-Menü
  */
 public class MaintenaCommandHandler {
 
@@ -127,6 +128,9 @@ public class MaintenaCommandHandler {
                 // /maintena freeze|unfreeze ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
                 .then(FreezeCommandHandler.buildFreezeTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.FREEZE))).then(FreezeCommandHandler.buildUnfreezeTree())
 
+                // /maintena nick ... (identisch zum eigenständigen /nick, ohne Argumente öffnet sich das Menü)
+                .then(NickCommandHandler.buildNickTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.NICK)))
+
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
 
@@ -163,6 +167,9 @@ public class MaintenaCommandHandler {
         // Eigenständige Freeze-Befehle, funktional identisch zu /maintena freeze|unfreeze
         dispatcher.register(FreezeCommandHandler.buildFreezeTree());
         dispatcher.register(FreezeCommandHandler.buildUnfreezeTree());
+
+        // Eigenständiger Nick-Befehl, funktional identisch zu /maintena nick
+        dispatcher.register(NickCommandHandler.buildNickTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

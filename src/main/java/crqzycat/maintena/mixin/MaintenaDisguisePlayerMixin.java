@@ -16,9 +16,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Server-side identity of a disguised player:
  * <ul>
- *   <li>player disguise: chat/display name shows the impersonated name with the impersonated
- *       player's team formatting (if that name is in a team), so the real team can't give him
- *       away. {@code getName()} is deliberately left alone: commands, logs and audit output keep
+ *   <li>player disguise / nickname: chat/display name shows the impersonated name (or the
+ *       nickname) with the team formatting of that name (if it is in a team), so the real team
+ *       can't give him away. {@code getName()} is deliberately left alone: commands, logs and audit output keep
  *       the real identity.</li>
  *   <li>entity morph: hurt and death sounds are the morph's, not the player's.</li>
  * </ul>
@@ -30,7 +30,7 @@ public abstract class MaintenaDisguisePlayerMixin {
     private void maintena$disguiseDisplayName(CallbackInfoReturnable<Component> cir) {
         if (!((Object) this instanceof ServerPlayer player)) return;
 
-        String name = DisguiseManager.getInstance().getPlayerDisguiseName(player);
+        String name = DisguiseManager.getInstance().getIdentityName(player);
         if (name == null) return;
 
         PlayerTeam team = player.level().getServer().getScoreboard().getPlayersTeam(name);

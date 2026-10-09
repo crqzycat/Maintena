@@ -1,5 +1,6 @@
 package crqzycat.maintena.vanish;
 
+import crqzycat.maintena.disguise.DisguiseManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
@@ -106,7 +107,9 @@ public class VanishManager {
             if (value) {
                 other.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(id)));
             } else {
-                other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
+                // Mit Nickname / Spieler-Disguise den falschen Namen eintragen, nicht den echten
+                other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(
+                        List.of(DisguiseManager.getInstance().identitySource(player))));
             }
 
             other.sendSystemMessage(message);

@@ -8,6 +8,7 @@ import crqzycat.maintena.disguise.DisguiseManager;
 import crqzycat.maintena.freeze.FreezeManager;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
+import crqzycat.maintena.nick.NickManager;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.mute.MuteManager;
 import crqzycat.maintena.vanish.VanishManager;
@@ -99,6 +100,7 @@ public final class SettingsGUI {
             case FREEZE -> freeze();
             case FREEZE_LIST -> freezeList();
             case FREEZE_ENTRY -> freezeEntry(a, arg);
+            case NICK -> nick(a);
         };
     }
 
@@ -120,6 +122,7 @@ public final class SettingsGUI {
                 .open("Vanish", Page.VANISH)
                 .open("Disguise", Page.DISGUISE)
                 .open("Freeze", Page.FREEZE)
+                .open("Nicknames", Page.NICK)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -570,6 +573,29 @@ public final class SettingsGUI {
                 .button("Show my disguise (chat)", "disguise status")
                 .button("Show disguised players (chat)", "disguise list")
                 .open("Refresh", Page.DISGUISE)
+                .back(Page.MAIN)
+                .build();
+    }
+
+    // ==================== Nicknames ====================
+
+    private static Dialog nick(CommandSourceStack a) {
+        ServerPlayer self = a.getPlayer();
+        NickManager manager = NickManager.getInstance();
+        String current = self == null ? null : manager.get(self);
+        int total = manager.all().size();
+
+        return new Builder("§6Nicknames", Page.NICK, null)
+                .text(current != null ? "§bYour nickname: §f" + current : "§7You have no nickname.")
+                .text("§7Other players see the nickname instead of your name (above your head, in the tab list "
+                        + "and in chat). 3-16 characters: letters, digits and _. It is removed when you disconnect "
+                        + "or the server restarts. Currently nicknamed: " + total)
+                .textInput("nickname", "Nickname", "", 16)
+                .button("Set nickname", "nick $(nickname)")
+                .button("Reset nickname", "nick reset")
+                .button("Show my nickname (chat)", "nick status")
+                .button("Show nicknames (chat)", "nick list")
+                .open("Refresh", Page.NICK)
                 .back(Page.MAIN)
                 .build();
     }

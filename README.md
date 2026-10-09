@@ -10,7 +10,7 @@ This document provides an overview of the planned administration and moderation 
 | **Vanish** | Administration | Makes staff members invisible to regular players. | High | ✅ Implemented |
 | **Disguise** | Administration | Allows staff to disguise as another mob or player. | Medium | ✅ Implemented |
 | **Freeze** | Moderation     | Immobilizes a player in place (e.g., during suspected hacking). | High | ✅ Implemented |
-| **Nicknames** | Administration | Allows staff to change the name shown to other players to hide their identity. | Medium | ⏳ Planned |
+| **Nicknames** | Administration | Allows staff to change the name shown to other players to hide their identity. | Medium | ✅ Implemented |
 
 ## 🛠️ Detailed Feature Breakdown
 
@@ -72,15 +72,18 @@ This document provides an overview of the planned administration and moderation 
   * Also available in the settings menu (`/maintena freeze`).
 * **Known limitations:** commands of other mods (like `/home` or `/spawn`) are not blocked, the inventory is not locked, and if the server moves a frozen player, the new position becomes the new freeze point.
 
-### 5. Nicknames
+### 5. Nicknames ✅
 
 * **Goal:** Let staff change the name other players see (player tag) to hide their identity a little, without changing the real account name.
-* **Suggested Commands:** `/nick <name>`, `/nick reset`
+* **Commands:** `/nick <name>`, `/nick reset`, `/nick status`, `/nick list`
 * **Features:**
   * Staff only (gamemaster permission).
-  * Replaces the name above the head, in the tab list and in the chat.
-  * Not persistent: a nickname is removed on disconnect and on server restart, so it is gone after a re-join.
-  * Name checks: length limit, allowed characters, and no names of existing players.
-  * Optional color codes in nicknames.
+  * Replaces the name above the head, in the tab list and in the chat. The skin stays the same.
+  * Not persistent: a nickname is removed on disconnect and on server restart, so it is gone after a re-join. It survives death and is set again after the respawn.
+  * Name checks: 3-16 characters (letters, digits and `_`), and no names of players who are online, have been on the server before or are whitelisted, no names already used by another nickname or disguise, and not your own real name.
+  * No join/leave messages when a nickname is set or removed.
+  * A nickname and a disguise share one identity: setting one replaces the other.
+  * Works together with vanish: becoming visible again shows the nickname in the tab list, not the real name.
   * Every nickname change is written to the server log.
   * Also available in the settings menu (`/maintena nick`).
+* **Known limitations:** no color codes (the name is part of the player profile, which clients only accept as a plain player name), you still see yourself with your real name, and commands, logs and Maintena's own audit output still use the real name.

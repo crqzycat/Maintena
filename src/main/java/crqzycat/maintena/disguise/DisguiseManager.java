@@ -95,6 +95,9 @@ public final class DisguiseManager {
         /** Player disguise: was a fake "joined the game" shown? (then undisguising shows "left") */
         boolean announced;
 
+        /** Nickname: a player identity with the player's own skin (no fake join/leave messages). */
+        boolean nick;
+
         State(UUID owner, EntityType<?> type, GameProfile skin) {
             this.owner = owner;
             this.type = type;
@@ -117,6 +120,9 @@ public final class DisguiseManager {
     /** Owner UUID -> the tracker of his entity (hide / show it on purpose). */
     private final Map<UUID, DisguiseTracker> trackers = new ConcurrentHashMap<>();
 
+    /** Nicknames of players who died: owner UUID -> nickname, set again after the respawn. */
+    private final Map<UUID, String> pendingNicks = new ConcurrentHashMap<>();
+
     private int hookCheckAt;
 
     private DisguiseManager() {
@@ -133,8 +139,22 @@ public final class DisguiseManager {
 
     // ==================== queries ====================
 
+    /** Is this player disguised? (a nickname is not a disguise, see {@link #isNicked}) */
     public boolean isDisguised(ServerPlayer player) {
-        return !disguises.isEmpty() && disguises.containsKey(player.getUUID());
+        if (disguises.isEmpty()) {
+            return false;
+        }
+
+        State state = disguises.get(player.getUUID());
+
+        return state != null && !state.nick;
+    }
+
+    /** Does this player have a nickname right now? */
+    public boolean isNicked(ServerPlayer player) {
+        State state = disguises.get(player.getUUID());
+
+        return state != null && state.nick;
     }
 
     /** Is anybody morphed right now? (fast path for the packet hook) */
@@ -169,7 +189,7 @@ public final class DisguiseManager {
         return !reshowAt.isEmpty() && reshowAt.containsKey(player.getUUID());
     }
 
-    /** Name of the impersonated player, or null. */
+    /** Name of the impersonated player, or null (nicknames are not disguises). */
     public String getPlayerDisguiseName(ServerPlayer player) {
         if (disguises.isEmpty()) {
             return null;
@@ -177,7 +197,45 @@ public final class DisguiseManager {
 
         State state = disguises.get(player.getUUID());
 
+        return state == null || state.skin == null || state.nick ? null : state.skin.name();
+    }
+
+    /** Name other players see for this player: impersonated name or nickname, or null. */
+    public String getIdentityName(ServerPlayer player) {
+        if (disguises.isEmpty()) {
+            return null;
+        }
+
+        State state = disguises.get(player.getUUID());
+
         return state == null || state.skin == null ? null : state.skin.name();
+    }
+
+    /**
+     * The player whose profile other clients know for this UUID: the packet source of a player
+     * disguise / nickname, otherwise the player himself. Use it whenever a tab list entry is sent.
+     */
+    public ServerPlayer identitySource(ServerPlayer player) {
+        State state = disguises.get(player.getUUID());
+
+        return state != null && state.packetSource != null ? state.packetSource : player;
+    }
+
+    /** Is this name used by the disguise or nickname of somebody else? */
+    public boolean isIdentityNameTaken(String name, UUID except) {
+        for (State state : disguises.values()) {
+            if (state.skin != null && !state.owner.equals(except) && state.skin.name().equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+
+        for (Map.Entry<UUID, String> entry : pendingNicks.entrySet()) {
+            if (!entry.getKey().equals(except) && entry.getValue().equalsIgnoreCase(name)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** Entity type of an entity morph, or null. */
@@ -191,6 +249,10 @@ public final class DisguiseManager {
         Map<UUID, String> result = new LinkedHashMap<>();
 
         for (State state : disguises.values()) {
+            if (state.nick) {
+                continue;
+            }
+
             result.put(
                     state.owner,
                     state.skin != null
@@ -239,8 +301,73 @@ public final class DisguiseManager {
         return true;
     }
 
+    // ==================== nicknames ====================
+
+    /**
+     * Gives the player a nickname: other clients get his own skin under the new name. Replaces a
+     * previous nickname or disguise (one identity per player). The name must already be validated
+     * (see NickManager): a plain player name, 3-16 characters.
+     */
+    public boolean nickname(ServerPlayer player, String nick) {
+        GameProfile real = player.getGameProfile();
+        GameProfile fake = new GameProfile(player.getUUID(), nick, real.properties());
+
+        State state = new State(player.getUUID(), null, fake);
+        state.nick = true;
+
+        pendingNicks.remove(player.getUUID());
+
+        return start(player, state);
+    }
+
+    /** Removes the nickname. @return false if the player has none */
+    public boolean clearNickname(ServerPlayer player) {
+        boolean pending = pendingNicks.remove(player.getUUID()) != null;
+        State state = disguises.get(player.getUUID());
+
+        if (state == null || !state.nick) {
+            return pending;
+        }
+
+        release(player.getUUID(), player);
+        return true;
+    }
+
+    /** Current nickname of the player, or null. */
+    public String getNickname(ServerPlayer player) {
+        State state = disguises.get(player.getUUID());
+
+        if (state != null && state.nick) {
+            return state.skin.name();
+        }
+
+        return pendingNicks.get(player.getUUID());
+    }
+
+    /** Owner UUID -> nickname of everybody who has one. */
+    public Map<UUID, String> nicknames() {
+        Map<UUID, String> result = new LinkedHashMap<>();
+
+        for (State state : disguises.values()) {
+            if (state.nick) {
+                result.put(state.owner, state.skin.name());
+            }
+        }
+
+        result.putAll(pendingNicks);
+        return result;
+    }
+
     /** Called when a player disconnects. */
     public void onDisconnect(ServerPlayer player) {
+        State state = disguises.get(player.getUUID());
+
+        if (state != null && state.nick) {
+            LOGGER.info("[Nick] {} disconnected, the nickname {} was removed",
+                    player.getName().getString(), state.skin.name());
+        }
+
+        pendingNicks.remove(player.getUUID());
         release(player.getUUID(), null);
         trackers.remove(player.getUUID());
         tabHidden.remove(player.getUUID());
@@ -296,6 +423,7 @@ public final class DisguiseManager {
         reshowAt.clear();
         tabHidden.clear();
         trackers.clear();
+        pendingNicks.clear();
     }
 
     // ==================== internals ====================
@@ -418,7 +546,7 @@ public final class DisguiseManager {
 
         // The "new" player joins - unless the impersonated account is online right now,
         // then a join message would make no sense.
-        if (!isOnline(player, state.skin)) {
+        if (!state.nick && !isOnline(player, state.skin)) {
             state.announced = true;
             announceFake(player, state.skin.name(), true);
         }
@@ -591,6 +719,10 @@ public final class DisguiseManager {
             tickReshow(server);
         }
 
+        if (!pendingNicks.isEmpty()) {
+            tickPendingNicks(server);
+        }
+
         if (hookCheckAt != 0 && server.getTickCount() >= hookCheckAt) {
             hookCheckAt = 0;
 
@@ -620,6 +752,31 @@ public final class DisguiseManager {
                 if (state.morphEntityId >= 0) {
                     morphs.remove(state.morphEntityId);
                 }
+            }
+        }
+    }
+
+    /** A nickname survives death: set it again as soon as the player is alive (respawned). */
+    private void tickPendingNicks(MinecraftServer server) {
+
+        for (Map.Entry<UUID, String> entry : List.copyOf(pendingNicks.entrySet())) {
+
+            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
+
+            if (player == null) {
+                pendingNicks.remove(entry.getKey());
+                continue;
+            }
+
+            if (player.isRemoved() || !player.isAlive()) {
+                continue;
+            }
+
+            pendingNicks.remove(entry.getKey());
+
+            if (nickname(player, entry.getValue())) {
+                LOGGER.info("[Nick] {} respawned, the nickname {} is active again",
+                        player.getName().getString(), entry.getValue());
             }
         }
     }
@@ -654,7 +811,12 @@ public final class DisguiseManager {
         }
 
         // A respawn creates a new player entity: the disguise ends with the death.
+        // A nickname is set again after the respawn (see tickPendingNicks).
         if (!player.isAlive()) {
+            if (state.nick) {
+                pendingNicks.put(state.owner, state.skin.name());
+            }
+
             release(state.owner, player);
             return;
         }
