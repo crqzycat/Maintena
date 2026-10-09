@@ -583,19 +583,15 @@ public final class SettingsGUI {
         ServerPlayer self = a.getPlayer();
         NickManager manager = NickManager.getInstance();
         String current = self == null ? null : manager.get(self);
-        int total = manager.all().size();
 
         return new Builder("§6Nicknames", Page.NICK, null)
                 .text(current != null ? "§bYour nickname: §f" + current : "§7You have no nickname.")
                 .text("§7Other players see the nickname instead of your name (above your head, in the tab list "
                         + "and in chat). 3-16 characters: letters, digits and _. It is removed when you disconnect "
-                        + "or the server restarts. Currently nicknamed: " + total)
+                        + "or the server restarts.")
                 .textInput("nickname", "Nickname", "", 16)
                 .button("Set nickname", "nick $(nickname)")
-                .button("Reset nickname", "nick reset")
-                .button("Show my nickname (chat)", "nick status")
-                .button("Show nicknames (chat)", "nick list")
-                .open("Refresh", Page.NICK)
+                .button("Remove nickname", "unnick")
                 .back(Page.MAIN)
                 .build();
     }

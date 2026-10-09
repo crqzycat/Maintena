@@ -129,7 +129,7 @@ public class MaintenaCommandHandler {
                 .then(FreezeCommandHandler.buildFreezeTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.FREEZE))).then(FreezeCommandHandler.buildUnfreezeTree())
 
                 // /maintena nick ... (identisch zum eigenständigen /nick, ohne Argumente öffnet sich das Menü)
-                .then(NickCommandHandler.buildNickTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.NICK)))
+                .then(NickCommandHandler.buildNickTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.NICK))).then(NickCommandHandler.buildUnnickTree())
 
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
@@ -170,6 +170,7 @@ public class MaintenaCommandHandler {
 
         // Eigenständiger Nick-Befehl, funktional identisch zu /maintena nick
         dispatcher.register(NickCommandHandler.buildNickTree());
+        dispatcher.register(NickCommandHandler.buildUnnickTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

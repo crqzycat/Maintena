@@ -55,7 +55,7 @@ public final class SettingsGUIHandler {
     private static final Set<String> ALLOWED_ROOTS = Set.of(
             "maintena", "maintenance", "restart", "announce",
             "ban", "unban", "banlist", "ip", "ipban", "ipunban", "ipbanlist",
-            "mute", "unmute", "mutelist", "vanish", "disguise", "undisguise", "freeze", "unfreeze", "nick"
+            "mute", "unmute", "mutelist", "vanish", "disguise", "undisguise", "freeze", "unfreeze", "nick", "unnick"
     );
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\(([A-Za-z0-9_]+)\\)");
