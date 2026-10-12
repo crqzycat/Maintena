@@ -1,14 +1,15 @@
 package crqzycat.maintena.maintenance;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.List;
 import java.util.Set;
 
 public class MaintenanceData {
-    public boolean enabled = false;
-    public Set<String> whitelistedPlayers = new HashSet<>();
-    public long endTime = -1; // -1 = no auto-stop set
+    // volatile bzw. concurrent: werden auch vom Netzwerk-Thread gelesen (Server-Liste/MOTD)
+    public volatile boolean enabled = false;
+    public Set<String> whitelistedPlayers = ConcurrentHashMap.newKeySet();
+    public volatile long endTime = -1; // -1 = no auto-stop set
     
     public static class Config {
         public String broadcastStart = "§6[§cMaintenance§6] §cServer entering maintenance mode.";

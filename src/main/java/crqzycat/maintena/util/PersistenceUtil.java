@@ -2,25 +2,42 @@ package crqzycat.maintena.util;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import crqzycat.maintena.announcement.AnnouncementData;
 import crqzycat.maintena.ban.BanConfig;
-import crqzycat.maintena.maintenance.MaintenanceData;
 import crqzycat.maintena.freeze.FreezeConfig;
+import crqzycat.maintena.maintenance.MaintenanceData;
 import crqzycat.maintena.mute.MuteConfig;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.restart.RestartData;
 import net.fabricmc.loader.api.FabricLoader;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 
+/**
+ * Lädt und speichert alle JSON-Dateien von Maintena.
+ *
+ * <ul>
+ *   <li>Immer UTF-8 (unabhängig vom System-Charset).</li>
+ *   <li>Schreiben ist atomar: erst in eine .tmp-Datei, dann umbenennen. Ein Absturz mitten im
+ *       Schreiben lässt die alte Datei unverändert.</li>
+ *   <li>Kaputte oder unlesbare Dateien crashen den Server nicht: sie werden als
+ *       .corrupt-&lt;zeit&gt; zur Seite gelegt und es werden Standardwerte geladen.</li>
+ * </ul>
+ */
 public class PersistenceUtil {
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("maintena");
     private static final File DATA_FILE = CONFIG_DIR.resolve("maintenance.json").toFile();
@@ -33,374 +50,316 @@ public class PersistenceUtil {
     private static final File MUTE_DATA_FILE = CONFIG_DIR.resolve("mutes.json").toFile();
     private static final File MUTE_CONFIG_FILE = CONFIG_DIR.resolve("mute-config.json").toFile();
     private static final File FREEZE_CONFIG_FILE = CONFIG_DIR.resolve("freeze-config.json").toFile();
-    
+
     static {
         try {
             Files.createDirectories(CONFIG_DIR);
         } catch (IOException e) {
-            e.printStackTrace();
+            LOGGER.error("[Persistence] Could not create {}", CONFIG_DIR, e);
         }
     }
-    
-    public static void saveData(MaintenanceData data) {
+
+    // ==================== Low-Level ====================
+
+    /** Schreibt atomar und in UTF-8. Gibt false zurück, wenn es nicht geklappt hat. */
+    private static synchronized boolean writeJson(File file, Object value) {
+        Path target = file.toPath();
+        Path temp = target.resolveSibling(file.getName() + ".tmp");
+
         try {
-            if (!DATA_FILE.exists()) {
-                DATA_FILE.createNewFile();
+            Files.createDirectories(target.getParent());
+            Files.writeString(temp, GSON.toJson(value), StandardCharsets.UTF_8);
+
+            try {
+                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
             }
-            
-            JsonObject json = new JsonObject();
-            json.addProperty("enabled", data.enabled);
-            json.addProperty("endTime", data.endTime);
-            
-            JsonArray players = new JsonArray();
-            for (String player : data.whitelistedPlayers) {
-                players.add(player);
+
+            return true;
+        } catch (IOException | RuntimeException e) {
+            LOGGER.error("[Persistence] Could not save {}", file.getName(), e);
+
+            try {
+                Files.deleteIfExists(temp);
+            } catch (IOException ignored) {
+                // Aufräumen ist nur ein Versuch
             }
-            json.add("whitelistedPlayers", players);
-            
-            try (FileWriter writer = new FileWriter(DATA_FILE)) {
-                GSON.toJson(json, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+
+            return false;
         }
     }
-    
+
+    /**
+     * Liest eine JSON-Datei. Gibt null zurück, wenn sie fehlt, leer, unlesbar oder kaputt ist.
+     * Kaputte Dateien werden als .corrupt-&lt;zeit&gt; gesichert, damit sie nicht überschrieben werden.
+     */
+    private static synchronized <T> T readJson(File file, Class<T> type) {
+        if (!file.exists()) {
+            return null;
+        }
+
+        String content;
+
+        try {
+            content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            LOGGER.error("[Persistence] Could not read {}", file.getName(), e);
+            return null;
+        }
+
+        if (content.isBlank()) {
+            return null;
+        }
+
+        try {
+            return GSON.fromJson(content, type);
+        } catch (RuntimeException e) {
+            quarantine(file, e);
+            return null;
+        }
+    }
+
+    private static void quarantine(File file, Exception cause) {
+        Path source = file.toPath();
+        Path backup = source.resolveSibling(file.getName() + ".corrupt-" + System.currentTimeMillis());
+
+        try {
+            Files.move(source, backup, StandardCopyOption.REPLACE_EXISTING);
+            LOGGER.error("[Persistence] {} is not valid JSON, moved to {} and loaded defaults",
+                    file.getName(), backup.getFileName(), cause);
+        } catch (IOException moveError) {
+            LOGGER.error("[Persistence] {} is not valid JSON and could not be moved away, loaded defaults",
+                    file.getName(), cause);
+        }
+    }
+
+    /** Lädt ein Objekt oder die Standardwerte; legt bei fehlender Datei die Standard-Datei an. */
+    private static <T> T loadOrDefault(File file, Class<T> type, T defaults, boolean createIfMissing) {
+        boolean existed = file.exists();
+        T loaded = readJson(file, type);
+
+        if (loaded != null) {
+            return loaded;
+        }
+
+        if (!existed && createIfMissing) {
+            writeJson(file, defaults);
+        }
+
+        return defaults;
+    }
+
+    private static boolean has(JsonObject json, String key) {
+        return json.has(key) && !json.get(key).isJsonNull();
+    }
+
+    private static String string(JsonObject json, String key, String fallback) {
+        if (!has(json, key)) {
+            return fallback;
+        }
+
+        try {
+            return json.get(key).getAsString();
+        } catch (RuntimeException e) {
+            return fallback;
+        }
+    }
+
+    // ==================== Maintenance ====================
+
+    public static void saveData(MaintenanceData data) {
+        JsonObject json = new JsonObject();
+        json.addProperty("enabled", data.enabled);
+        json.addProperty("endTime", data.endTime);
+
+        JsonArray players = new JsonArray();
+        for (String player : data.whitelistedPlayers) {
+            players.add(player);
+        }
+        json.add("whitelistedPlayers", players);
+
+        writeJson(DATA_FILE, json);
+    }
+
     public static MaintenanceData loadData() {
         MaintenanceData data = new MaintenanceData();
-        
-        if (!DATA_FILE.exists()) {
+        JsonObject json = readJson(DATA_FILE, JsonObject.class);
+
+        if (json == null) {
             return data;
         }
-        
-        try (FileReader reader = new FileReader(DATA_FILE)) {
-            JsonObject json = GSON.fromJson(reader, JsonObject.class);
-            if (json != null) {
+
+        try {
+            if (has(json, "enabled")) {
                 data.enabled = json.get("enabled").getAsBoolean();
+            }
+
+            if (has(json, "endTime")) {
                 data.endTime = json.get("endTime").getAsLong();
-                
-                JsonArray players = json.getAsJsonArray("whitelistedPlayers");
-                if (players != null) {
-                    for (int i = 0; i < players.size(); i++) {
-                        data.whitelistedPlayers.add(players.get(i).getAsString());
+            }
+
+            if (has(json, "whitelistedPlayers") && json.get("whitelistedPlayers").isJsonArray()) {
+                for (JsonElement element : json.getAsJsonArray("whitelistedPlayers")) {
+                    if (!element.isJsonNull()) {
+                        data.whitelistedPlayers.add(element.getAsString());
                     }
                 }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (RuntimeException e) {
+            LOGGER.error("[Persistence] {} has unexpected values, using what could be read",
+                    DATA_FILE.getName(), e);
         }
-        
+
         return data;
     }
-    
+
     public static void saveConfig(MaintenanceData.Config config) {
-        try {
-            if (!CONFIG_FILE.exists()) {
-                CONFIG_FILE.createNewFile();
-            }
-            
-            JsonObject json = new JsonObject();
-            json.addProperty("broadcastStart", config.broadcastStart);
-            json.addProperty("broadcastEnd", config.broadcastEnd);
-            json.addProperty("broadcastWarning", config.broadcastWarning);
-            json.addProperty("statusMessage", config.statusMessage);
-            json.addProperty("motdMaintenanceLine", config.motdMaintenanceLine);
-            json.addProperty("motdMaintenanceTimed", config.motdMaintenanceTimed);
-            json.addProperty("motdMaintenanceNoTime", config.motdMaintenanceNoTime);
-            
-            try (FileWriter writer = new FileWriter(CONFIG_FILE)) {
-                GSON.toJson(json, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        JsonObject json = new JsonObject();
+        json.addProperty("broadcastStart", config.broadcastStart);
+        json.addProperty("broadcastEnd", config.broadcastEnd);
+        json.addProperty("broadcastWarning", config.broadcastWarning);
+        json.addProperty("statusMessage", config.statusMessage);
+        json.addProperty("motdMaintenanceLine", config.motdMaintenanceLine);
+        json.addProperty("motdMaintenanceTimed", config.motdMaintenanceTimed);
+        json.addProperty("motdMaintenanceNoTime", config.motdMaintenanceNoTime);
+
+        writeJson(CONFIG_FILE, json);
     }
-    
+
     public static MaintenanceData.Config loadConfig() {
         MaintenanceData.Config config = new MaintenanceData.Config();
-        
+
         if (!CONFIG_FILE.exists()) {
             saveConfig(config); // Create default config
             return config;
         }
-        
-        try (FileReader reader = new FileReader(CONFIG_FILE)) {
-            JsonObject json = GSON.fromJson(reader, JsonObject.class);
-            if (json != null) {
-                if (json.has("broadcastStart")) config.broadcastStart = json.get("broadcastStart").getAsString();
-                if (json.has("broadcastEnd")) config.broadcastEnd = json.get("broadcastEnd").getAsString();
-                if (json.has("broadcastWarning")) config.broadcastWarning = json.get("broadcastWarning").getAsString();
-                if (json.has("statusMessage")) config.statusMessage = json.get("statusMessage").getAsString();
-                if (json.has("motdMaintenanceLine")) config.motdMaintenanceLine = json.get("motdMaintenanceLine").getAsString();
-                if (json.has("motdMaintenanceTimed")) config.motdMaintenanceTimed = json.get("motdMaintenanceTimed").getAsString();
-                if (json.has("motdMaintenanceNoTime")) config.motdMaintenanceNoTime = json.get("motdMaintenanceNoTime").getAsString();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
+
+        JsonObject json = readJson(CONFIG_FILE, JsonObject.class);
+
+        if (json != null) {
+            config.broadcastStart = string(json, "broadcastStart", config.broadcastStart);
+            config.broadcastEnd = string(json, "broadcastEnd", config.broadcastEnd);
+            config.broadcastWarning = string(json, "broadcastWarning", config.broadcastWarning);
+            config.statusMessage = string(json, "statusMessage", config.statusMessage);
+            config.motdMaintenanceLine = string(json, "motdMaintenanceLine", config.motdMaintenanceLine);
+            config.motdMaintenanceTimed = string(json, "motdMaintenanceTimed", config.motdMaintenanceTimed);
+            config.motdMaintenanceNoTime = string(json, "motdMaintenanceNoTime", config.motdMaintenanceNoTime);
         }
-        
+
         return config;
     }
 
     // ==================== Restart Schedules ====================
 
     public static void saveRestartData(RestartData data) {
-        try {
-            if (!RESTART_DATA_FILE.exists()) {
-                RESTART_DATA_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(RESTART_DATA_FILE)) {
-                GSON.toJson(data, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(RESTART_DATA_FILE, data);
     }
 
     public static RestartData loadRestartData() {
-        if (!RESTART_DATA_FILE.exists()) {
-            return new RestartData();
+        RestartData data = loadOrDefault(RESTART_DATA_FILE, RestartData.class, new RestartData(), false);
+
+        if (data.schedules == null) {
+            data.schedules = new ArrayList<>();
         }
 
-        try (FileReader reader = new FileReader(RESTART_DATA_FILE)) {
-            RestartData data = GSON.fromJson(reader, RestartData.class);
-            return data != null ? data : new RestartData();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new RestartData();
-        }
+        data.schedules.removeIf(schedule -> schedule == null || schedule.id == null || schedule.type == null);
+
+        return data;
     }
 
     public static void saveRestartConfig(RestartData.Config config) {
-        try {
-            if (!RESTART_CONFIG_FILE.exists()) {
-                RESTART_CONFIG_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(RESTART_CONFIG_FILE)) {
-                GSON.toJson(config, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(RESTART_CONFIG_FILE, config);
     }
 
     public static RestartData.Config loadRestartConfig() {
-        if (!RESTART_CONFIG_FILE.exists()) {
-            RestartData.Config config = new RestartData.Config();
-            saveRestartConfig(config); // Create default config
-            return config;
+        RestartData.Config config = loadOrDefault(
+                RESTART_CONFIG_FILE, RestartData.Config.class, new RestartData.Config(), true);
+
+        if (config.warningMinutes == null) {
+            config.warningMinutes = new RestartData.Config().warningMinutes;
         }
 
-        try (FileReader reader = new FileReader(RESTART_CONFIG_FILE)) {
-            RestartData.Config config = GSON.fromJson(reader, RestartData.Config.class);
-            return config != null ? config : new RestartData.Config();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new RestartData.Config();
-        }
+        return config;
     }
 
     // ==================== Announcement Schedules ====================
 
     public static void saveAnnouncementData(AnnouncementData data) {
-        try {
-            if (!ANNOUNCEMENT_DATA_FILE.exists()) {
-                ANNOUNCEMENT_DATA_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(ANNOUNCEMENT_DATA_FILE)) {
-                GSON.toJson(data, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(ANNOUNCEMENT_DATA_FILE, data);
     }
 
     public static AnnouncementData loadAnnouncementData() {
-        if (!ANNOUNCEMENT_DATA_FILE.exists()) {
-            return new AnnouncementData();
+        AnnouncementData data = loadOrDefault(
+                ANNOUNCEMENT_DATA_FILE, AnnouncementData.class, new AnnouncementData(), false);
+
+        if (data.schedules == null) {
+            data.schedules = new ArrayList<>();
         }
 
-        try (FileReader reader = new FileReader(ANNOUNCEMENT_DATA_FILE)) {
-            AnnouncementData data = GSON.fromJson(reader, AnnouncementData.class);
-            return data != null ? data : new AnnouncementData();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new AnnouncementData();
-        }
+        data.schedules.removeIf(schedule -> schedule == null || schedule.type == null);
+
+        return data;
     }
 
     public static void saveAnnouncementConfig(AnnouncementData.Config config) {
-        try {
-            if (!ANNOUNCEMENT_CONFIG_FILE.exists()) {
-                ANNOUNCEMENT_CONFIG_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(ANNOUNCEMENT_CONFIG_FILE)) {
-                GSON.toJson(config, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(ANNOUNCEMENT_CONFIG_FILE, config);
     }
 
     public static AnnouncementData.Config loadAnnouncementConfig() {
-        if (!ANNOUNCEMENT_CONFIG_FILE.exists()) {
-            AnnouncementData.Config config = new AnnouncementData.Config();
-            saveAnnouncementConfig(config); // Create default config
-            return config;
-        }
-
-        try (FileReader reader = new FileReader(ANNOUNCEMENT_CONFIG_FILE)) {
-            AnnouncementData.Config config = GSON.fromJson(reader, AnnouncementData.Config.class);
-            return config != null ? config : new AnnouncementData.Config();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new AnnouncementData.Config();
-        }
+        return loadOrDefault(
+                ANNOUNCEMENT_CONFIG_FILE, AnnouncementData.Config.class, new AnnouncementData.Config(), true);
     }
 
     // ==================== Ban Config ====================
 
     public static void saveBanConfig(BanConfig config) {
-        try {
-            if (!BAN_CONFIG_FILE.exists()) {
-                BAN_CONFIG_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(BAN_CONFIG_FILE)) {
-                GSON.toJson(config, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(BAN_CONFIG_FILE, config);
     }
 
     public static BanConfig loadBanConfig() {
-        if (!BAN_CONFIG_FILE.exists()) {
-            BanConfig config = new BanConfig();
-            saveBanConfig(config); // Create default config
-            return config;
-        }
-
-        try (FileReader reader = new FileReader(BAN_CONFIG_FILE)) {
-            BanConfig config = GSON.fromJson(reader, BanConfig.class);
-            return config != null ? config : new BanConfig();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new BanConfig();
-        }
+        return loadOrDefault(BAN_CONFIG_FILE, BanConfig.class, new BanConfig(), true);
     }
 
     // ==================== Mutes ====================
 
     public static void saveMuteData(MuteData data) {
-        try {
-            if (!MUTE_DATA_FILE.exists()) {
-                MUTE_DATA_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(MUTE_DATA_FILE)) {
-                GSON.toJson(data, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(MUTE_DATA_FILE, data);
     }
 
     public static MuteData loadMuteData() {
-        if (!MUTE_DATA_FILE.exists()) {
-            return new MuteData();
+        MuteData data = loadOrDefault(MUTE_DATA_FILE, MuteData.class, new MuteData(), false);
+
+        if (data.mutes == null) {
+            data.mutes = new ArrayList<>();
         }
 
-        try (FileReader reader = new FileReader(MUTE_DATA_FILE)) {
-            MuteData data = GSON.fromJson(reader, MuteData.class);
+        data.mutes.removeIf(entry -> entry == null || entry.uuid == null);
 
-            if (data == null) {
-                return new MuteData();
-            }
-
-            if (data.mutes == null) {
-                data.mutes = new java.util.ArrayList<>();
-            }
-
-            return data;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new MuteData();
-        }
+        return data;
     }
 
     public static void saveMuteConfig(MuteConfig config) {
-        try {
-            if (!MUTE_CONFIG_FILE.exists()) {
-                MUTE_CONFIG_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(MUTE_CONFIG_FILE)) {
-                GSON.toJson(config, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(MUTE_CONFIG_FILE, config);
     }
 
     public static MuteConfig loadMuteConfig() {
-        if (!MUTE_CONFIG_FILE.exists()) {
-            MuteConfig config = new MuteConfig();
-            saveMuteConfig(config); // Create default config
-            return config;
-        }
-
-        try (FileReader reader = new FileReader(MUTE_CONFIG_FILE)) {
-            MuteConfig config = GSON.fromJson(reader, MuteConfig.class);
-            return config != null ? config : new MuteConfig();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new MuteConfig();
-        }
+        return loadOrDefault(MUTE_CONFIG_FILE, MuteConfig.class, new MuteConfig(), true);
     }
 
     // ==================== Freeze ====================
 
     public static void saveFreezeConfig(FreezeConfig config) {
-        try {
-            if (!FREEZE_CONFIG_FILE.exists()) {
-                FREEZE_CONFIG_FILE.createNewFile();
-            }
-
-            try (FileWriter writer = new FileWriter(FREEZE_CONFIG_FILE)) {
-                GSON.toJson(config, writer);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        writeJson(FREEZE_CONFIG_FILE, config);
     }
 
     public static FreezeConfig loadFreezeConfig() {
-        if (!FREEZE_CONFIG_FILE.exists()) {
-            FreezeConfig config = new FreezeConfig();
-            saveFreezeConfig(config); // Create default config
-            return config;
+        FreezeConfig config = loadOrDefault(FREEZE_CONFIG_FILE, FreezeConfig.class, new FreezeConfig(), true);
+
+        if (config.instructions == null) {
+            config.instructions = new FreezeConfig().instructions;
         }
 
-        try (FileReader reader = new FileReader(FREEZE_CONFIG_FILE)) {
-            FreezeConfig config = GSON.fromJson(reader, FreezeConfig.class);
-
-            if (config == null) {
-                return new FreezeConfig();
-            }
-
-            if (config.instructions == null) {
-                config.instructions = new FreezeConfig().instructions;
-            }
-
-            return config;
-        } catch (IOException e) {
-            e.printStackTrace();
-            return new FreezeConfig();
-        }
+        return config;
     }
 }

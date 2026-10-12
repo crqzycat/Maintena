@@ -9,17 +9,20 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MaintenanceManager {
 
     private static MaintenanceManager instance;
 
-    private MaintenanceData data;
-    private MaintenanceData.Config config;
-    private MinecraftServer server;
+    // volatile: werden vom Timer- und Netzwerk-Thread gelesen, vom Server-Thread ersetzt
+    private volatile MaintenanceData data;
+    private volatile MaintenanceData.Config config;
+    private volatile MinecraftServer server;
 
     private Timer checkTimer;
-    private long lastWarningTime = 0;
+    private long lastWarningTime = 0; // nur Server-Thread
+    private final AtomicBoolean tickPending = new AtomicBoolean(false);
 
     private static final long WARNING_INTERVAL = 5 * 60 * 1000;
     private static final long CHECK_INTERVAL = 1000;
@@ -235,46 +238,48 @@ public class MaintenanceManager {
 
         checkTimer = new Timer("MaintenanceCheckTimer", true);
 
+        // Der Timer-Thread fasst selbst keinen Zustand an, er stößt nur den Check auf dem
+        // Server-Thread an (dort laufen auch die Commands). So gibt es keine Race Conditions.
         checkTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                if (data.enabled && data.isTimeExpired()) {
-                    runOnServerThread(() -> {
-                        if (data.enabled && data.isTimeExpired()) {
-                            disable();
-                        }
-                    });
+                MinecraftServer current = server;
+
+                if (current == null || !tickPending.compareAndSet(false, true)) {
                     return;
                 }
 
-                if (data.enabled && data.endTime != -1) {
-                    long timeRemaining = data.getTimeRemaining();
-                    long minutesRemaining = timeRemaining / (60 * 1000);
-
-                    if (minutesRemaining <= 30 && minutesRemaining > 0) {
-                        long timeSinceLastWarning =
-                                System.currentTimeMillis()
-                                        - lastWarningTime;
-
-                        if (timeSinceLastWarning >= WARNING_INTERVAL) {
-                            String warningMsg = config.broadcastWarning
-                                    .replace(
-                                            "%time%",
-                                            String.valueOf(minutesRemaining)
-                                    );
-
-                            runOnServerThread(() -> {
-                                if (data.enabled) {
-                                    broadcastMessage(warningMsg);
-                                }
-                            });
-
-                            lastWarningTime = System.currentTimeMillis();
-                        }
-                    }
-                }
+                current.execute(() -> {
+                    tickPending.set(false);
+                    checkTimerTick();
+                });
             }
         }, 0, CHECK_INTERVAL);
+    }
+
+    /** Läuft auf dem Server-Thread. */
+    private void checkTimerTick() {
+        if (!data.enabled || data.endTime == -1) {
+            return;
+        }
+
+        if (data.isTimeExpired()) {
+            disable();
+            return;
+        }
+
+        long minutesRemaining = data.getTimeRemaining() / (60 * 1000);
+
+        if (minutesRemaining <= 30 && minutesRemaining > 0) {
+            long now = System.currentTimeMillis();
+
+            if (now - lastWarningTime >= WARNING_INTERVAL) {
+                broadcastMessage(config.broadcastWarning
+                        .replace("%time%", String.valueOf(minutesRemaining)));
+
+                lastWarningTime = now;
+            }
+        }
     }
 
     private void stopAutoStopTimer() {
@@ -293,12 +298,6 @@ public class MaintenanceManager {
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.sendSystemMessage(textMessage);
-        }
-    }
-
-    private void runOnServerThread(Runnable task) {
-        if (server != null) {
-            server.execute(task);
         }
     }
 

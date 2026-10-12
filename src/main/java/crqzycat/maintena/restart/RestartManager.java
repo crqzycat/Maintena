@@ -16,16 +16,18 @@ import java.util.List;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RestartManager {
 
     private static RestartManager instance;
 
-    private RestartData data;
-    private RestartData.Config config;
-    private MinecraftServer server;
+    private volatile RestartData data;
+    private volatile RestartData.Config config;
+    private volatile MinecraftServer server;
 
     private Timer tickTimer;
+    private final AtomicBoolean tickPending = new AtomicBoolean(false);
     private static final long TICK_INTERVAL = 1000;
 
     // Aktuell laufender Countdown, -1 = kein Restart angesetzt
@@ -299,7 +301,18 @@ public class RestartManager {
         tickTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                tick();
+                // Der Timer-Thread fasst keinen Zustand an: tick() läuft auf dem Server-Thread,
+                // wie die Commands. So gibt es keine Race Conditions auf data/announcedMilestones.
+                MinecraftServer current = server;
+
+                if (current == null || !tickPending.compareAndSet(false, true)) {
+                    return;
+                }
+
+                current.execute(() -> {
+                    tickPending.set(false);
+                    tick();
+                });
             }
         }, 0, TICK_INTERVAL);
     }
@@ -322,7 +335,7 @@ public class RestartManager {
             long remaining = activeRestartTime - now;
 
             if (remaining <= 0) {
-                runOnServerThread(this::executeScheduledRestart);
+                executeScheduledRestart();
             } else {
                 checkWarnings(remaining);
             }
@@ -387,7 +400,7 @@ public class RestartManager {
                 String message = config.broadcastWarning
                         .replace("%time%", String.valueOf(milestone));
 
-                runOnServerThread(() -> broadcastMessage(message));
+                broadcastMessage(message);
             }
         }
     }
@@ -493,12 +506,6 @@ public class RestartManager {
 
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.sendSystemMessage(textMessage);
-        }
-    }
-
-    private void runOnServerThread(Runnable task) {
-        if (server != null) {
-            server.execute(task);
         }
     }
 }
