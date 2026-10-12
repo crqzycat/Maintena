@@ -13,6 +13,7 @@ import crqzycat.maintena.event.LoginEventHandler;
 import crqzycat.maintena.event.ChatMuteHandler;
 import crqzycat.maintena.event.VanishHandler;
 import crqzycat.maintena.event.FreezeHandler;
+import crqzycat.maintena.command.AliasCommandHandler;
 
 public class Maintena implements ModInitializer {
 
@@ -33,6 +34,9 @@ public class Maintena implements ModInitializer {
 
         // Register freeze handler (blocks interactions, resets movement attempts, actionbar hint)
         FreezeHandler.register();
+
+        // Register saved command aliases (added to the command tree after all other commands)
+        AliasCommandHandler.register();
 
         DisguiseManager.getInstance().initialize();
         DisguiseHandler.register();

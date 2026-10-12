@@ -48,6 +48,7 @@ import java.util.List;
  * /maintena disguise      Disguise-Menü (auch /maintena undisguise)
  * /maintena freeze        Freeze-Menü (auch /maintena unfreeze)
  * /maintena nick          Nick-Menü
+ * /maintena alias         Alias-Menü
  */
 public class MaintenaCommandHandler {
 
@@ -131,6 +132,9 @@ public class MaintenaCommandHandler {
                 // /maintena nick ... (identisch zum eigenständigen /nick, ohne Argumente öffnet sich das Menü)
                 .then(NickCommandHandler.buildNickTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.NICK))).then(NickCommandHandler.buildUnnickTree())
 
+                // /maintena alias ... (identisch zum eigenständigen /alias)
+                .then(AliasCommandHandler.buildAliasTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.ALIAS)))
+
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
 
@@ -171,6 +175,9 @@ public class MaintenaCommandHandler {
         // Eigenständiger Nick-Befehl, funktional identisch zu /maintena nick
         dispatcher.register(NickCommandHandler.buildNickTree());
         dispatcher.register(NickCommandHandler.buildUnnickTree());
+
+        // Eigenständiger Alias-Befehl, funktional identisch zu /maintena alias
+        dispatcher.register(AliasCommandHandler.buildAliasTree());
     }
 
     // ==================== /maintena restart  &  /restart ====================

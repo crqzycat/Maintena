@@ -8,6 +8,7 @@ import crqzycat.maintena.disguise.DisguiseManager;
 import crqzycat.maintena.freeze.FreezeManager;
 import crqzycat.maintena.gui.SettingsGUIHandler.Page;
 import crqzycat.maintena.maintenance.MaintenanceManager;
+import crqzycat.maintena.alias.AliasManager;
 import crqzycat.maintena.nick.NickManager;
 import crqzycat.maintena.mute.MuteData;
 import crqzycat.maintena.mute.MuteManager;
@@ -40,6 +41,7 @@ import net.minecraft.server.players.UserBanListEntry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -101,6 +103,9 @@ public final class SettingsGUI {
             case FREEZE_LIST -> freezeList();
             case FREEZE_ENTRY -> freezeEntry(a, arg);
             case NICK -> nick(a);
+            case ALIAS -> alias();
+            case ALIAS_LIST -> aliasList();
+            case ALIAS_ENTRY -> aliasEntry(arg);
         };
     }
 
@@ -123,6 +128,7 @@ public final class SettingsGUI {
                 .open("Disguise", Page.DISGUISE)
                 .open("Freeze", Page.FREEZE)
                 .open("Nicknames", Page.NICK)
+                .open("Aliases", Page.ALIAS)
                 .button("Reload config", "maintena reload")
                 .build();
     }
@@ -659,6 +665,57 @@ public final class SettingsGUI {
 
         return b.buttonThen("Unfreeze", "unfreeze " + name, Page.FREEZE_LIST, null)
                 .back(Page.FREEZE_LIST)
+                .build();
+    }
+
+    // ==================== Aliases ====================
+
+    private static Dialog alias() {
+        int count = AliasManager.getInstance().all().size();
+
+        return new Builder("§6Command aliases", Page.ALIAS, null)
+                .text("§7Give a command a second name. Command tp and alias baum makes /baum work like /tp, "
+                        + "with all its tab completions. With a sub-command, command gamemode, sub-command creative "
+                        + "and alias gmc makes /gmc work like /gamemode creative. Aliases stay after restarts. "
+                        + "Currently: " + count)
+                .textInput("command", "Command (e.g. tp or gamemode)", "", 32)
+                .textInput("sub", "Sub-command (only for the second button)", "", 64)
+                .textInput("alias", "Alias (e.g. baum or gmc)", "", 32)
+                .button("Create alias", "alias $(command) $(alias)")
+                .button("Create alias for sub-command", "alias sub $(command) \"$(sub)\" $(alias)")
+                .open("Aliases (" + count + ")", Page.ALIAS_LIST)
+                .button("Show aliases (chat)", "alias list")
+                .back(Page.MAIN)
+                .build();
+    }
+
+    private static Dialog aliasList() {
+        Map<String, String> all = AliasManager.getInstance().all();
+
+        Builder b = new Builder("§6Aliases", Page.ALIAS_LIST, null)
+                .text(all.isEmpty() ? "§7There are no aliases." : "§7Click an alias to manage it.");
+
+        for (Map.Entry<String, String> entry : all.entrySet()) {
+            b.open("/" + entry.getKey() + " → /" + entry.getValue(), Page.ALIAS_ENTRY, entry.getKey());
+        }
+
+        return b.back(Page.ALIAS).build();
+    }
+
+    private static Dialog aliasEntry(String name) {
+        String command = name == null ? null : AliasManager.getInstance().all().get(name);
+
+        Builder b = new Builder("§6/" + name, Page.ALIAS_ENTRY, name);
+
+        if (command == null) {
+            return b.text("§cThis alias does not exist (anymore).")
+                    .back(Page.ALIAS_LIST)
+                    .build();
+        }
+
+        return b.text("§7/" + name + " works like §f/" + command + "§7, with the same arguments and tab completions.")
+                .buttonThen("Remove alias", "alias remove " + name, Page.ALIAS_LIST, null)
+                .back(Page.ALIAS_LIST)
                 .build();
     }
 
