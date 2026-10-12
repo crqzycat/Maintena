@@ -50,12 +50,13 @@ import java.util.function.Predicate;
 public final class AliasManager {
 
     private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
-    private static final AliasManager INSTANCE = new AliasManager();
-
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Type MAP_TYPE = new TypeToken<LinkedHashMap<String, String>>() {}.getType();
     private static final Path FILE = FabricLoader.getInstance().getConfigDir()
             .resolve("maintena").resolve("aliases.json");
+
+    // Muss NACH den anderen statischen Feldern stehen: der Konstruktor lädt die Datei (FILE, GSON, MAP_TYPE)
+    private static final AliasManager INSTANCE = new AliasManager();
 
     /** Alias -> Befehl (ein Wort, oder Befehl + Unterbefehl) */
     private final Map<String, String> aliases = new LinkedHashMap<>();
