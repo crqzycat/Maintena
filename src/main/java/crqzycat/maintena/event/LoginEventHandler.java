@@ -27,10 +27,10 @@ public class LoginEventHandler {
             boolean isOp = server.getPlayerList().isOp(player);
 
             if (!isOp && !manager.isWhitelisted(player.id(), player.name())) {
-                String motd = manager.getMaintenanceMotd();
+                Component kickMessage = manager.getKickMessage();
 
-                if (motd != null) {
-                    handler.getPlayer().connection.disconnect(Component.literal(motd));
+                if (kickMessage != null) {
+                    handler.getPlayer().connection.disconnect(kickMessage);
                 }
             }
         });

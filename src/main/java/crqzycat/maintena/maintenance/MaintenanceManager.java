@@ -86,7 +86,11 @@ public class MaintenanceManager {
             return;
         }
 
-        Component kickMessage = Component.literal(getMaintenanceMotd());
+        Component kickMessage = getKickMessage();
+
+        if (kickMessage == null) {
+            return;
+        }
 
         // Kopie der Liste, da disconnect() die Original-Liste während der Iteration verändert
         for (ServerPlayer player : new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
@@ -219,25 +223,38 @@ public class MaintenanceManager {
             return null;
         }
 
-        String line2;
+        return config.motdMaintenanceLine + "\n" + buildTimeLine();
+    }
 
-        if (data.endTime == -1) {
-            line2 = config.motdMaintenanceNoTime;
-        } else {
-            long remaining = data.getTimeRemaining();
-
-            if (remaining <= 0) {
-                line2 = config.motdMaintenanceNoTime;
-            } else {
-                long minutes = remaining / (60 * 1000);
-                long seconds = (remaining % (60 * 1000)) / 1000;
-                String timeStr = String.format("%d:%02d", minutes, seconds);
-
-                line2 = config.motdMaintenanceTimed.replace("%time%", timeStr);
-            }
+    /**
+     * Baut die Meldung, die ein abgewiesener oder gekickter Spieler sieht (eigener Text aus
+     * config.json, "kickMessage"). Gibt null zurück, wenn keine Wartung läuft.
+     */
+    public Component getKickMessage() {
+        if (!data.enabled) {
+            return null;
         }
 
-        return config.motdMaintenanceLine + "\n" + line2;
+        return Component.literal(config.kickMessage.replace("%info%", buildTimeLine()));
+    }
+
+    /** Die Zeile mit der Restzeit ("Back online in 12:30") bzw. dem Hinweis, dass es keine gibt. */
+    private String buildTimeLine() {
+        if (data.endTime == -1) {
+            return config.motdMaintenanceNoTime;
+        }
+
+        long remaining = data.getTimeRemaining();
+
+        if (remaining <= 0) {
+            return config.motdMaintenanceNoTime;
+        }
+
+        long minutes = remaining / (60 * 1000);
+        long seconds = (remaining % (60 * 1000)) / 1000;
+        String timeStr = String.format("%d:%02d", minutes, seconds);
+
+        return config.motdMaintenanceTimed.replace("%time%", timeStr);
     }
 
     private String formatEndTime(long endTime) {

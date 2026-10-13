@@ -29,7 +29,7 @@ import java.util.concurrent.CompletableFuture;
  *   /ipbanlist [seite]                      alle aktiven IP-Bans
  *
  * <player> muss online sein, damit die IP ermittelt werden kann; alternativ kann eine
- * IP-Adresse direkt angegeben werden. Der Vanilla-Befehl /ban-ip wird entfernt, /pardon-ip
+ * IP-Adresse direkt angegeben werden (IPv4 oder IPv6, IPv6 in Anführungszeichen: /ipban "2001:db8::1"). Der Vanilla-Befehl /ban-ip wird entfernt, /pardon-ip
  * bleibt bestehen und wirkt auf dieselbe Liste.
  */
 public class IpBanCommandHandler {
@@ -51,13 +51,13 @@ public class IpBanCommandHandler {
                 .requires(IpBanCommandHandler::hasPermission)
 
                 .then(Commands.literal("info")
-                        .then(Commands.argument("target", StringArgumentType.word())
+                        .then(Commands.argument("target", StringArgumentType.string())
                                 .suggests(IpBanCommandHandler::suggestBannedIps)
                                 .executes(IpBanCommandHandler::showInfo)
                         )
                 )
 
-                .then(Commands.argument("target", StringArgumentType.word())
+                .then(Commands.argument("target", StringArgumentType.string())
                         .suggests(IpBanCommandHandler::suggestOnlinePlayers)
                         .executes(ctx -> ban(ctx, ""))
                         .then(Commands.argument("details", StringArgumentType.greedyString())
@@ -70,7 +70,7 @@ public class IpBanCommandHandler {
     public static LiteralArgumentBuilder<CommandSourceStack> buildIpUnbanTree() {
         return Commands.literal("ipunban")
                 .requires(IpBanCommandHandler::hasPermission)
-                .then(Commands.argument("target", StringArgumentType.word())
+                .then(Commands.argument("target", StringArgumentType.string())
                         .suggests(IpBanCommandHandler::suggestBannedIps)
                         .executes(IpBanCommandHandler::unban)
                 );
@@ -283,7 +283,9 @@ public class IpBanCommandHandler {
         return SharedSuggestionProvider.suggest(
                 IpBanManager.getInstance().getActiveBans(ctx.getSource().getServer())
                         .stream()
-                        .map(IpBanListEntry::getUser),
+                        .map(IpBanListEntry::getUser)
+                        // IPv6 enthält ":" und muss im Befehl in Anführungszeichen stehen
+                        .map(ip -> ip.contains(":") ? "\"" + ip + "\"" : ip),
                 builder
         );
     }

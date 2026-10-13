@@ -16,10 +16,14 @@ import crqzycat.maintena.mute.MuteManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.restart.RestartSchedule;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.Event;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.DayOfWeek;
 import java.util.List;
@@ -51,6 +55,8 @@ import java.util.List;
  * /maintena alias         Alias-Menü
  */
 public class MaintenaCommandHandler {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
 
     private static final List<String> WEEKDAYS = List.of("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday");
 
@@ -84,6 +90,15 @@ public class MaintenaCommandHandler {
 
     public static void register() {
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> registerMaintenaCommand(dispatcher));
+
+        // Die eigenständigen Befehle erst NACH den Befehlen aller anderen Mods registrieren (aber vor den
+        // Aliasen), damit schon vergebene Namen nicht überschrieben oder vermischt werden
+        Identifier standalone = Identifier.fromNamespaceAndPath("maintena", "standalone");
+        Identifier aliases = Identifier.fromNamespaceAndPath("maintena", "aliases");
+
+        CommandRegistrationCallback.EVENT.addPhaseOrdering(Event.DEFAULT_PHASE, standalone);
+        CommandRegistrationCallback.EVENT.addPhaseOrdering(standalone, aliases);
+        CommandRegistrationCallback.EVENT.register(standalone, (dispatcher, registryAccess, environment) -> registerStandaloneCommands(dispatcher));
     }
 
     private static void registerMaintenaCommand(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -137,47 +152,68 @@ public class MaintenaCommandHandler {
 
                 // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
                 .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
+    }
 
+    /**
+     * Die eigenständigen Befehle (/ban, /mute, /v, /ip, /nick, ...). Sie werden nach den Befehlen
+     * aller anderen Mods registriert und nur, wenn der Name noch frei ist. So überschreiben oder
+     * vermischen sie keine fremden Befehle (Brigadier führt gleichnamige Befehle sonst zusammen).
+     * Jeder Befehl ist weiterhin über /maintena <befehl> erreichbar.
+     */
+    private static void registerStandaloneCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         // Eigenständiger /restart Befehl, funktional identisch zu /maintena restart
-        dispatcher.register(buildRestartTree(false));
+        registerIfFree(dispatcher, buildRestartTree(false));
 
         // Eigenständiger /announce Befehl, funktional identisch zu /maintena announce
-        dispatcher.register(AnnouncementCommandHandler.buildAnnounceTree());
+        registerIfFree(dispatcher, AnnouncementCommandHandler.buildAnnounceTree());
 
         // Eigenständige Ban-Befehle, funktional identisch zu /maintena ban|unban|banlist
-        dispatcher.register(BanCommandHandler.buildBanTree());
-        dispatcher.register(BanCommandHandler.buildUnbanTree());
-        dispatcher.register(BanCommandHandler.buildBanlistTree());
+        registerIfFree(dispatcher, BanCommandHandler.buildBanTree());
+        registerIfFree(dispatcher, BanCommandHandler.buildUnbanTree());
+        registerIfFree(dispatcher, BanCommandHandler.buildBanlistTree());
 
         // Eigenständige IP-Ban-Befehle, funktional identisch zu /maintena ip|ipban|ipunban|ipbanlist
-        dispatcher.register(IpBanCommandHandler.buildIpTree());
-        dispatcher.register(IpBanCommandHandler.buildIpBanTree());
-        dispatcher.register(IpBanCommandHandler.buildIpUnbanTree());
-        dispatcher.register(IpBanCommandHandler.buildIpBanlistTree());
+        registerIfFree(dispatcher, IpBanCommandHandler.buildIpTree());
+        registerIfFree(dispatcher, IpBanCommandHandler.buildIpBanTree());
+        registerIfFree(dispatcher, IpBanCommandHandler.buildIpUnbanTree());
+        registerIfFree(dispatcher, IpBanCommandHandler.buildIpBanlistTree());
 
         // Eigenständige Mute-Befehle (Chat-Timeouts), funktional identisch zu /maintena mute|unmute|mutelist
-        dispatcher.register(MuteCommandHandler.buildMuteTree());
-        dispatcher.register(MuteCommandHandler.buildMuteTree("timeout"));
-        dispatcher.register(MuteCommandHandler.buildUnmuteTree());
-        dispatcher.register(MuteCommandHandler.buildMutelistTree());
+        registerIfFree(dispatcher, MuteCommandHandler.buildMuteTree());
+        registerIfFree(dispatcher, MuteCommandHandler.buildMuteTree("timeout"));
+        registerIfFree(dispatcher, MuteCommandHandler.buildUnmuteTree());
+        registerIfFree(dispatcher, MuteCommandHandler.buildMutelistTree());
 
         // Eigenständiger /vanish und Kurzform /v
-        dispatcher.register(VanishCommandHandler.buildVanishTree("vanish"));
-        dispatcher.register(VanishCommandHandler.buildVanishTree("v"));
+        registerIfFree(dispatcher, VanishCommandHandler.buildVanishTree("vanish"));
+        registerIfFree(dispatcher, VanishCommandHandler.buildVanishTree("v"));
 
-        dispatcher.register(DisguiseCommandHandler.buildDisguiseTree());
-        dispatcher.register(DisguiseCommandHandler.buildUndisguiseTree());
+        registerIfFree(dispatcher, DisguiseCommandHandler.buildDisguiseTree());
+        registerIfFree(dispatcher, DisguiseCommandHandler.buildUndisguiseTree());
 
         // Eigenständige Freeze-Befehle, funktional identisch zu /maintena freeze|unfreeze
-        dispatcher.register(FreezeCommandHandler.buildFreezeTree());
-        dispatcher.register(FreezeCommandHandler.buildUnfreezeTree());
+        registerIfFree(dispatcher, FreezeCommandHandler.buildFreezeTree());
+        registerIfFree(dispatcher, FreezeCommandHandler.buildUnfreezeTree());
 
         // Eigenständiger Nick-Befehl, funktional identisch zu /maintena nick
-        dispatcher.register(NickCommandHandler.buildNickTree());
-        dispatcher.register(NickCommandHandler.buildUnnickTree());
+        registerIfFree(dispatcher, NickCommandHandler.buildNickTree());
+        registerIfFree(dispatcher, NickCommandHandler.buildUnnickTree());
 
         // Eigenständiger Alias-Befehl, funktional identisch zu /maintena alias
-        dispatcher.register(AliasCommandHandler.buildAliasTree());
+        registerIfFree(dispatcher, AliasCommandHandler.buildAliasTree());
+    }
+
+    private static void registerIfFree(CommandDispatcher<CommandSourceStack> dispatcher,
+                                       LiteralArgumentBuilder<CommandSourceStack> command) {
+        String name = command.getLiteral();
+
+        if (dispatcher.getRoot().getChild(name) != null) {
+            LOGGER.warn("[Commands] /{} already exists (vanilla or another mod), Maintena's /{} was not "
+                    + "registered. Use /maintena <command> instead.", name, name);
+            return;
+        }
+
+        dispatcher.register(command);
     }
 
     // ==================== /maintena restart  &  /restart ====================

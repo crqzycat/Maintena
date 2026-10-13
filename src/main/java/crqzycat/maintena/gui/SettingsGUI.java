@@ -442,10 +442,15 @@ public final class SettingsGUI {
             b.text("§7Reason: §f" + entry.getReason());
         }
 
-        return b.buttonThen("Remove IP ban", "ipunban " + ip, Page.IPBAN_LIST, null)
-                .button("IP ban info (chat)", "ipban info " + ip)
+        return b.buttonThen("Remove IP ban", "ipunban " + quoteIp(ip), Page.IPBAN_LIST, null)
+                .button("IP ban info (chat)", "ipban info " + quoteIp(ip))
                 .back(Page.IPBAN_LIST)
                 .build();
+    }
+
+    /** IPv6 enthält ":" und muss im Befehl in Anführungszeichen stehen. */
+    private static String quoteIp(String ip) {
+        return ip.contains(":") ? "\"" + ip + "\"" : ip;
     }
 
     private static Dialog ipOnline(CommandSourceStack a) {

@@ -59,6 +59,8 @@ public final class CommandTreeUtil {
                 LOGGER.error("[Commands] Could not remove /{} from the command tree, "
                         + "the Brigadier version probably changed", name);
                 allRemoved = false;
+            } else {
+                LOGGER.info("[Commands] Removed /{} from the command tree (replaced by Maintena)", name);
             }
         }
 

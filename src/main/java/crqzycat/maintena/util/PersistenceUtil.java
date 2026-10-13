@@ -268,6 +268,7 @@ public class PersistenceUtil {
         json.addProperty("broadcastEnd", config.broadcastEnd);
         json.addProperty("broadcastWarning", config.broadcastWarning);
         json.addProperty("statusMessage", config.statusMessage);
+        json.addProperty("kickMessage", config.kickMessage);
         json.addProperty("motdMaintenanceLine", config.motdMaintenanceLine);
         json.addProperty("motdMaintenanceTimed", config.motdMaintenanceTimed);
         json.addProperty("motdMaintenanceNoTime", config.motdMaintenanceNoTime);
@@ -290,9 +291,15 @@ public class PersistenceUtil {
             config.broadcastEnd = string(json, "broadcastEnd", config.broadcastEnd);
             config.broadcastWarning = string(json, "broadcastWarning", config.broadcastWarning);
             config.statusMessage = string(json, "statusMessage", config.statusMessage);
+            config.kickMessage = string(json, "kickMessage", config.kickMessage);
             config.motdMaintenanceLine = string(json, "motdMaintenanceLine", config.motdMaintenanceLine);
             config.motdMaintenanceTimed = string(json, "motdMaintenanceTimed", config.motdMaintenanceTimed);
             config.motdMaintenanceNoTime = string(json, "motdMaintenanceNoTime", config.motdMaintenanceNoTime);
+
+            // Neue Einstellung aus einer älteren Version: in die Datei schreiben, damit man sie findet
+            if (!has(json, "kickMessage")) {
+                saveConfig(config);
+            }
         }
 
         return config;

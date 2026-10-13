@@ -37,6 +37,10 @@ public class MaintenanceData {
                 "§eWhitelisted Players: §b%players%\n" +
                 "§eEnd Time: §b%endtime%";
 
+        // Shown on the disconnect screen when a player is not allowed in during maintenance.
+        // %info% is replaced by the "back online in ..." line (same texts as the server list below)
+        public String kickMessage = "§c⚠ The server is under maintenance\n\n§7You can't join right now.\n%info%";
+
         // Shown in the server list (multiplayer screen) MOTD while maintenance is active
         public String motdMaintenanceLine = "§c⚠ Under Maintenance";
         public String motdMaintenanceTimed = "§eBack online in §b%time%";

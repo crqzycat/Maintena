@@ -1,6 +1,7 @@
 package crqzycat.maintena.mixin;
 
 import crqzycat.maintena.ban.BanManager;
+import crqzycat.maintena.ban.IpBanManager;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.vanish.VanishManager;
 import net.minecraft.network.chat.Component;
@@ -55,16 +56,29 @@ public abstract class MaintenaPlayerListMixin {
             CallbackInfoReturnable<Component> cir
     ) {
         if (cir.getReturnValue() == null) {
-            // Vanilla lässt den Spieler rein: jetzt noch den Wartungsmodus prüfen
+            // Vanilla lässt den Spieler rein. IPv6-Adressen erkennt Vanilla in der IP-Ban-Liste
+            // nicht zuverlässig (es schneidet die Adresse beim ersten ":" ab), deshalb hier selbst prüfen
+            String loginIp = maintena$extractIp(address);
+            IpBanListEntry loginIpBan = loginIp == null ? null : this.getIpBans().get(loginIp);
+
+            if (loginIpBan != null) {
+                cir.setReturnValue(BanManager.getInstance().buildBanScreen(
+                        loginIpBan.getReason(), loginIpBan.getSource(),
+                        loginIpBan.getCreated(), loginIpBan.getExpires()
+                ));
+                return;
+            }
+
+            // Danach den Wartungsmodus prüfen
             MaintenanceManager maintenance = MaintenanceManager.getInstance();
 
             if (maintenance.isEnabled()
                     && !this.isOp(nameAndId)
                     && !maintenance.isWhitelisted(nameAndId.id(), nameAndId.name())) {
-                String motd = maintenance.getMaintenanceMotd();
+                Component kickMessage = maintenance.getKickMessage();
 
-                if (motd != null) {
-                    cir.setReturnValue(Component.literal(motd));
+                if (kickMessage != null) {
+                    cir.setReturnValue(kickMessage);
                 }
             }
 
@@ -126,7 +140,7 @@ public abstract class MaintenaPlayerListMixin {
 
     private static String maintena$extractIp(SocketAddress address) {
         if (address instanceof InetSocketAddress inet && inet.getAddress() != null) {
-            return inet.getAddress().getHostAddress();
+            return IpBanManager.hostAddress(inet.getAddress());
         }
 
         return null;
