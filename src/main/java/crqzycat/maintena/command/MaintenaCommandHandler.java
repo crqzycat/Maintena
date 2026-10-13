@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -19,7 +20,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
 
 import java.time.DayOfWeek;
 import java.util.List;
@@ -90,7 +90,7 @@ public class MaintenaCommandHandler {
         // Vanilla /ban und /banlist durch die Maintena-Versionen ersetzen
         BanCommandHandler.removeVanillaCommands(dispatcher);
 
-        dispatcher.register(Commands.literal("maintena").requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+        dispatcher.register(Commands.literal("maintena").requires(PermissionUtil.requires(PermissionUtil.MENU))
 
                 // /maintena ohne Argumente -> Hauptmenü
                 .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAIN))
@@ -187,7 +187,7 @@ public class MaintenaCommandHandler {
      *             (statt sofort neu zu starten), "schedule add" ohne Argumente das Formular für Zeitpläne.
      */
     private static LiteralArgumentBuilder<CommandSourceStack> buildRestartTree(boolean menu) {
-        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("restart").requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("restart").requires(PermissionUtil.requires(PermissionUtil.RESTART))
 
                 .executes(ctx -> {
                     RestartManager.getInstance().restartNow();

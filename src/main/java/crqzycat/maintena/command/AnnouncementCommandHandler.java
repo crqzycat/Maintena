@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -14,7 +15,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
 
 import java.time.DayOfWeek;
 import java.util.List;
@@ -65,8 +65,7 @@ public class AnnouncementCommandHandler {
      */
     public static LiteralArgumentBuilder<CommandSourceStack> buildAnnounceTree(boolean menu) {
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal("announce")
-                .requires(source -> source.permissions()
-                        .hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(PermissionUtil.requires(PermissionUtil.ANNOUNCE))
 
                 // Einmalige Announcements ohne Schedule
                 .then(Commands.literal("chat")

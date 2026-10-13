@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
@@ -15,7 +16,6 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.permissions.Permissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +58,7 @@ public final class AliasCommandHandler {
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildAliasTree() {
         return Commands.literal("alias")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(PermissionUtil.requires(PermissionUtil.ALIAS))
 
                 .executes(ctx -> {
                     ctx.getSource().sendSuccess(

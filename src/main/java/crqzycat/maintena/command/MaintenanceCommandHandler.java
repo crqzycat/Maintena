@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -9,8 +10,9 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.GameProfileArgument;
+import net.minecraft.server.players.NameAndId;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.permissions.Permissions;
 
 public class MaintenanceCommandHandler {
 
@@ -31,9 +33,7 @@ public class MaintenanceCommandHandler {
     public static LiteralArgumentBuilder<CommandSourceStack> buildMaintenanceCommand() {
         return
                 Commands.literal("maintenance")
-                        .requires(source -> source.permissions()
-                                .hasPermission(
-                                        Permissions.COMMANDS_GAMEMASTER))
+                        .requires(PermissionUtil.requires(PermissionUtil.MAINTENANCE))
 
                         .then(Commands.literal("on")
                                 .then(Commands.argument(
@@ -105,7 +105,7 @@ public class MaintenanceCommandHandler {
                         .then(Commands.literal("add")
                                 .then(Commands.argument(
                                                         "player",
-                                                        StringArgumentType.word()
+                                                        GameProfileArgument.gameProfile()
                                                 )
                                                 .suggests((context, builder) -> {
                                                     // Alle Spieler suggerieren, außer die bereits auf der Whitelist stehen
@@ -126,19 +126,28 @@ public class MaintenanceCommandHandler {
                                                     );
                                                 })
                                                 .executes(ctx -> {
-                                                    String player =
-                                                            StringArgumentType.getString(
-                                                                    ctx,
-                                                                    "player"
-                                                            );
+                                                    // Über das Profil (Name + UUID) hinzufügen: die Whitelist
+                                                    // gilt für den Account, nicht für den Namen
+                                                    java.util.Collection<NameAndId> targets =
+                                                            GameProfileArgument.getGameProfiles(ctx, "player");
+
+                                                    if (targets.size() != 1) {
+                                                        ctx.getSource().sendFailure(Component.literal(
+                                                                "§c✗ Please select exactly one player"
+                                                        ));
+
+                                                        return 0;
+                                                    }
+
+                                                    NameAndId target = targets.iterator().next();
 
                                                     MaintenanceManager.getInstance()
-                                                            .addWhitelistedPlayer(player);
+                                                            .addWhitelistedPlayer(target.name(), target.id());
 
                                                     ctx.getSource().sendSuccess(
                                                             () -> Component.literal(
                                                                     "§a✓ Added "
-                                                                            + player
+                                                                            + target.name()
                                                                             + " to whitelist"
                                                             ),
                                                             true

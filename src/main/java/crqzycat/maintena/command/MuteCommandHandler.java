@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -18,7 +19,6 @@ import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.server.players.NameAndId;
 
 import java.util.Collection;
@@ -92,7 +92,7 @@ public class MuteCommandHandler {
     }
 
     private static boolean hasPermission(CommandSourceStack source) {
-        return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        return PermissionUtil.has(source, PermissionUtil.MUTE);
     }
 
     // ==================== Ausführung ====================

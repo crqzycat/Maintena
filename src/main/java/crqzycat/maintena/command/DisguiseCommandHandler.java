@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.authlib.GameProfile;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
@@ -13,7 +14,6 @@ import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.entity.EntityType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,7 +44,7 @@ public final class DisguiseCommandHandler {
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildDisguiseTree() {
         return Commands.literal("disguise")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(PermissionUtil.requires(PermissionUtil.DISGUISE))
                 .then(Commands.literal("status").executes(DisguiseCommandHandler::status))
                 .then(Commands.literal("list").executes(DisguiseCommandHandler::list))
                 .then(Commands.argument("target", StringArgumentType.greedyString())
@@ -78,7 +78,7 @@ public final class DisguiseCommandHandler {
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildUndisguiseTree() {
         return Commands.literal("undisguise")
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(PermissionUtil.requires(PermissionUtil.DISGUISE))
                 .executes(DisguiseCommandHandler::undisguise);
     }
 

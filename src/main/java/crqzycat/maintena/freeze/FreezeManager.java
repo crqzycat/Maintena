@@ -1,5 +1,6 @@
 package crqzycat.maintena.freeze;
 
+import crqzycat.maintena.util.PermissionUtil;
 import crqzycat.maintena.ban.BanManager;
 import crqzycat.maintena.util.PersistenceUtil;
 import net.minecraft.network.chat.Component;
@@ -10,7 +11,6 @@ import net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.world.level.Level;
 
 import java.util.ArrayList;
@@ -300,14 +300,14 @@ public final class FreezeManager {
                 .replace("%reason%", String.valueOf(entry.reason));
     }
 
-    /** Meldung an alle Operatoren (außer dem betroffenen Spieler selbst). */
+    /** Meldung an alle, die Freeze nutzen dürfen (außer dem betroffenen Spieler selbst). */
     private void notifyStaff(ServerPlayer except, String message) {
         MinecraftServer server = except.level().getServer();
         Component text = Component.literal(message);
 
         for (ServerPlayer other : server.getPlayerList().getPlayers()) {
-            if (other != except && other.createCommandSourceStack().permissions()
-                    .hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
+            if (other != except
+                    && PermissionUtil.has(other.createCommandSourceStack(), PermissionUtil.FREEZE)) {
                 other.sendSystemMessage(text);
             }
         }

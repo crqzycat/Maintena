@@ -1,5 +1,6 @@
 package crqzycat.maintena.gui;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.context.CommandContext;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.Holder;
@@ -9,7 +10,6 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.dialog.Dialog;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -142,7 +142,7 @@ public final class SettingsGUIHandler {
             CommandSourceStack source = player.createCommandSourceStack();
 
             // Das Menue ist nur fuer Admins; die Befehle pruefen die Rechte zusaetzlich selbst.
-            if (!source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER)) {
+            if (!PermissionUtil.has(source, PermissionUtil.MENU)) {
                 return;
             }
 

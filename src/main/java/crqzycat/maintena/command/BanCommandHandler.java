@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import crqzycat.maintena.util.PlayerNames;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -18,7 +19,6 @@ import net.minecraft.commands.arguments.GameProfileArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.server.players.UserBanListEntry;
 
@@ -114,7 +114,7 @@ public class BanCommandHandler {
     }
 
     private static boolean hasPermission(CommandSourceStack source) {
-        return source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        return PermissionUtil.has(source, PermissionUtil.BAN);
     }
 
     // ==================== Ausführung ====================

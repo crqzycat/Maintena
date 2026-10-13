@@ -1,14 +1,15 @@
 package crqzycat.maintena.vanish;
 
+import crqzycat.maintena.util.PermissionUtil;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 import net.minecraft.server.waypoints.ServerWaypointManager;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.waypoints.WaypointTransmitter;
@@ -21,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Vanish: Team-Mitglieder werden für normale Spieler unsichtbar (Spielwelt + Tab-Liste).
- * Sehen dürfen vanished Spieler alle mit Gamemaster-Rechten (OP), alle anderen nicht.
+ * Sehen dürfen vanished Spieler alle, die Vanish nutzen dürfen (OP oder Permission maintena.vanish).
  *
  * Der Zustand liegt nur im Arbeitsspeicher: er bleibt beim Re-Join erhalten, geht aber bei
  * einem Server-Neustart verloren. Das Verstecken in der Spielwelt übernimmt
@@ -33,6 +34,9 @@ public class VanishManager {
     private static VanishManager instance;
 
     private final Set<UUID> vanished = ConcurrentHashMap.newKeySet();
+
+    /** Teilmenge von vanished: nur wer gerade online ist (für die Server-Liste, Netzwerk-Thread). */
+    private final Set<UUID> onlineVanished = ConcurrentHashMap.newKeySet();
 
     private VanishManager() {
     }
@@ -54,10 +58,9 @@ public class VanishManager {
         return entity instanceof ServerPlayer player && isVanished(player);
     }
 
-    /** Darf dieser Spieler vanished Spieler sehen? (Gamemaster/OP) */
+    /** Darf dieser Spieler vanished Spieler sehen? (OP oder Permission maintena.vanish) */
     public boolean canSee(ServerPlayer viewer) {
-        return viewer.createCommandSourceStack().permissions()
-                .hasPermission(Permissions.COMMANDS_GAMEMASTER);
+        return PermissionUtil.has(viewer.createCommandSourceStack(), PermissionUtil.VANISH);
     }
 
     /** Alle aktuell online befindlichen Spieler im Vanish. */
@@ -84,6 +87,12 @@ public class VanishManager {
 
         if (!changed) {
             return false;
+        }
+
+        if (value) {
+            onlineVanished.add(id);
+        } else {
+            onlineVanished.remove(id);
         }
 
         // Spielwelt: Tracking neu aufbauen, das Mixin entscheidet pro Betrachter
@@ -125,6 +134,7 @@ public class VanishManager {
 
         if (isVanished(joined)) {
             UUID id = joined.nameAndId().id();
+            onlineVanished.add(id);
 
             for (ServerPlayer other : server.getPlayerList().getPlayers()) {
                 if (other != joined && !canSee(other)) {
@@ -141,6 +151,48 @@ public class VanishManager {
                 }
             }
         }
+    }
+
+    /** Beim Verlassen des Servers: der Spieler zählt nicht mehr als online vanished. */
+    public void onDisconnect(ServerPlayer player) {
+        onlineVanished.remove(player.nameAndId().id());
+    }
+
+    /** UUIDs aller Spieler im Vanish, die gerade online sind (thread-sicher, als Kopie). */
+    public Set<UUID> getOnlineVanishedIds() {
+        return Set.copyOf(onlineVanished);
+    }
+
+    /**
+     * Ist diese Chat-Nachricht die Join- oder Leave-Meldung ("X joined the game", "X left the
+     * game") eines Spielers im Vanish? Dann wird dieser Spieler zurückgegeben, sonst null.
+     */
+    public ServerPlayer findVanishedJoinLeaveSubject(Component message, List<ServerPlayer> players) {
+        if (vanished.isEmpty() || !(message.getContents() instanceof TranslatableContents contents)) {
+            return null;
+        }
+
+        String key = contents.getKey();
+
+        if (!key.startsWith("multiplayer.player.joined") && !key.equals("multiplayer.player.left")) {
+            return null;
+        }
+
+        Object[] args = contents.getArgs();
+
+        if (args.length == 0 || !(args[0] instanceof Component subject)) {
+            return null;
+        }
+
+        String subjectName = subject.getString();
+
+        for (ServerPlayer player : players) {
+            if (isVanished(player) && player.getDisplayName().getString().equals(subjectName)) {
+                return player;
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import crqzycat.maintena.vanish.VanishManager;
@@ -7,7 +8,6 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.permissions.Permissions;
 
 import java.util.List;
 
@@ -22,7 +22,7 @@ public class VanishCommandHandler {
 
     public static LiteralArgumentBuilder<CommandSourceStack> buildVanishTree(String name) {
         return Commands.literal(name)
-                .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
+                .requires(PermissionUtil.requires(PermissionUtil.VANISH))
 
                 .executes(ctx -> set(ctx, null))
 

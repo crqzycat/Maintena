@@ -26,6 +26,9 @@ public class VanishHandler {
             }
         });
 
+        ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
+                VanishManager.getInstance().onDisconnect(handler.getPlayer()));
+
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             if (++tickCounter < 40) {
                 return;

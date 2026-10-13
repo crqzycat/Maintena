@@ -24,6 +24,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.UUID;
 
 /**
  * Lädt und speichert alle JSON-Dateien von Maintena.
@@ -174,7 +175,14 @@ public class PersistenceUtil {
         json.addProperty("endTime", data.endTime);
 
         JsonArray players = new JsonArray();
-        for (String player : data.whitelistedPlayers) {
+        for (MaintenanceData.WhitelistEntry entry : data.whitelist) {
+            JsonObject player = new JsonObject();
+            player.addProperty("name", entry.name);
+
+            if (entry.uuid != null) {
+                player.addProperty("uuid", entry.uuid);
+            }
+
             players.add(player);
         }
         json.add("whitelistedPlayers", players);
@@ -201,8 +209,10 @@ public class PersistenceUtil {
 
             if (has(json, "whitelistedPlayers") && json.get("whitelistedPlayers").isJsonArray()) {
                 for (JsonElement element : json.getAsJsonArray("whitelistedPlayers")) {
-                    if (!element.isJsonNull()) {
-                        data.whitelistedPlayers.add(element.getAsString());
+                    MaintenanceData.WhitelistEntry entry = readWhitelistEntry(element);
+
+                    if (entry != null) {
+                        data.whitelist.add(entry);
                     }
                 }
             }
@@ -212,6 +222,44 @@ public class PersistenceUtil {
         }
 
         return data;
+    }
+
+    /**
+     * Neues Format: {"name": "...", "uuid": "..."}. Altes Format (nur ein Name als Text)
+     * wird weiterhin gelesen und später an die UUID gebunden.
+     */
+    private static MaintenanceData.WhitelistEntry readWhitelistEntry(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+
+        if (element.isJsonPrimitive()) {
+            String name = element.getAsString();
+            return name.isBlank() ? null : new MaintenanceData.WhitelistEntry(name, null);
+        }
+
+        if (!element.isJsonObject()) {
+            return null;
+        }
+
+        JsonObject object = element.getAsJsonObject();
+        String name = string(object, "name", null);
+
+        if (name == null || name.isBlank()) {
+            return null;
+        }
+
+        String uuid = string(object, "uuid", null);
+
+        if (uuid != null) {
+            try {
+                uuid = UUID.fromString(uuid).toString();
+            } catch (IllegalArgumentException e) {
+                uuid = null;
+            }
+        }
+
+        return new MaintenanceData.WhitelistEntry(name, uuid);
     }
 
     public static void saveConfig(MaintenanceData.Config config) {

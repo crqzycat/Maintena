@@ -1,17 +1,31 @@
 package crqzycat.maintena.maintenance;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import crqzycat.maintena.util.PersistenceUtil;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.io.BufferedReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.TreeMap;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MaintenanceManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
 
     private static MaintenanceManager instance;
 
@@ -32,9 +46,7 @@ public class MaintenanceManager {
         this.data = PersistenceUtil.loadData();
         this.config = PersistenceUtil.loadConfig();
 
-        if (server != null) {
-            addOpsToWhitelist();
-        }
+        bindLegacyWhitelistEntries();
 
         if (data.enabled && data.endTime != -1) {
             startAutoStopTimer();
@@ -55,18 +67,6 @@ public class MaintenanceManager {
         }
 
         return instance;
-    }
-
-    private void addOpsToWhitelist() {
-        if (server == null) {
-            return;
-        }
-
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (server.getPlayerList().isOp(player.nameAndId())) {
-                addWhitelistedPlayer(player.getName().getString());
-            }
-        }
     }
 
     public void enable(long durationMinutes) {
@@ -106,7 +106,7 @@ public class MaintenanceManager {
         for (ServerPlayer player : new java.util.ArrayList<>(server.getPlayerList().getPlayers())) {
             boolean isOp = server.getPlayerList().isOp(player.nameAndId());
 
-            if (!isOp && !isWhitelisted(player.getName().getString())) {
+            if (!isOp && !isWhitelisted(player.nameAndId().id(), player.nameAndId().name())) {
                 player.connection.disconnect(kickMessage);
             }
         }
@@ -133,6 +133,8 @@ public class MaintenanceManager {
         this.data = PersistenceUtil.loadData();
         this.config = PersistenceUtil.loadConfig();
 
+        bindLegacyWhitelistEntries();
+
         if (data.enabled && data.endTime != -1) {
             startAutoStopTimer();
         } else {
@@ -145,8 +147,8 @@ public class MaintenanceManager {
         PersistenceUtil.saveData(data);
     }
 
-    public void addWhitelistedPlayer(String player) {
-        data.addWhitelistedPlayer(player);
+    public void addWhitelistedPlayer(String name, UUID id) {
+        data.addWhitelistedPlayer(name, id);
         PersistenceUtil.saveData(data);
     }
 
@@ -155,8 +157,75 @@ public class MaintenanceManager {
         PersistenceUtil.saveData(data);
     }
 
-    public boolean isWhitelisted(String player) {
-        return data.isWhitelisted(player);
+    /**
+     * Prüft die Whitelist über die UUID. Alte Einträge (nur Name) werden dabei an die UUID
+     * gebunden, und ein geänderter Spielername wird im Eintrag nachgezogen.
+     */
+    public boolean isWhitelisted(UUID id, String name) {
+        MaintenanceData current = data;
+
+        if (!current.isWhitelisted(id, name)) {
+            return false;
+        }
+
+        if (current.refreshEntry(id, name)) {
+            PersistenceUtil.saveData(current);
+        }
+
+        return true;
+    }
+
+    /**
+     * Alte Whitelist-Einträge (nur Name, aus früheren Versionen) anhand von usercache.json an
+     * die UUID binden. Was dort nicht steht, wird beim ersten Login des Spielers gebunden.
+     */
+    private void bindLegacyWhitelistEntries() {
+        MaintenanceData current = data;
+
+        if (!current.hasLegacyEntries()) {
+            return;
+        }
+
+        if (current.bindLegacyEntries(readUsercache())) {
+            PersistenceUtil.saveData(current);
+        }
+    }
+
+    /** Liest usercache.json: Name (Groß-/Kleinschreibung egal) zu UUID. */
+    private static Map<String, UUID> readUsercache() {
+        Map<String, UUID> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        Path file = FabricLoader.getInstance().getGameDir().resolve("usercache.json");
+
+        if (!Files.exists(file)) {
+            return result;
+        }
+
+        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            JsonArray entries = JsonParser.parseReader(reader).getAsJsonArray();
+
+            for (JsonElement element : entries) {
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+
+                JsonObject entry = element.getAsJsonObject();
+
+                if (!entry.has("name") || !entry.has("uuid")) {
+                    continue;
+                }
+
+                try {
+                    result.put(entry.get("name").getAsString(), UUID.fromString(entry.get("uuid").getAsString()));
+                } catch (IllegalArgumentException ignored) {
+                    // Eintrag mit ungültiger UUID überspringen
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.warn("[Maintenance] Could not read usercache.json", e);
+        }
+
+        return result;
     }
 
     public boolean isEnabled() {
@@ -176,9 +245,11 @@ public class MaintenanceManager {
                 ? "§a✓ Enabled"
                 : "§c✗ Disabled";
 
-        String playersStr = data.whitelistedPlayers.isEmpty()
+        java.util.List<String> whitelistNames = data.getWhitelistNames();
+
+        String playersStr = whitelistNames.isEmpty()
                 ? "None"
-                : String.join(", ", data.whitelistedPlayers);
+                : String.join(", ", whitelistNames);
 
         String endTimeStr = data.endTime == -1
                 ? "§eManual stop"
@@ -304,7 +375,7 @@ public class MaintenanceManager {
     public void setServer(MinecraftServer server) {
         this.server = server;
 
-        addOpsToWhitelist();
+        bindLegacyWhitelistEntries();
 
         if (data.enabled && data.endTime != -1) {
             startAutoStopTimer();
@@ -328,27 +399,7 @@ public class MaintenanceManager {
         // usercache.json enthält Name + UUID von jedem Spieler, der jemals gejoint ist
         // (auch offline Spieler) - die playerdata-Dateien sind immer nach UUID benannt,
         // daher lässt sich der Name daraus nicht rekonstruieren.
-        java.io.File usercacheFile = net.fabricmc.loader.api.FabricLoader.getInstance()
-                .getGameDir()
-                .resolve("usercache.json")
-                .toFile();
-
-        if (usercacheFile.exists()) {
-            try (java.io.FileReader reader = new java.io.FileReader(usercacheFile)) {
-                com.google.gson.JsonArray entries =
-                        com.google.gson.JsonParser.parseReader(reader).getAsJsonArray();
-
-                for (com.google.gson.JsonElement element : entries) {
-                    com.google.gson.JsonObject entry = element.getAsJsonObject();
-
-                    if (entry.has("name")) {
-                        allPlayers.add(entry.get("name").getAsString());
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
+        allPlayers.addAll(readUsercache().keySet());
 
         return allPlayers;
     }
@@ -357,6 +408,6 @@ public class MaintenanceManager {
      * Gibt nur die Spieler zurück, die auf der Whitelist sind
      */
     public java.util.Collection<String> getWhitelistedPlayers() {
-        return new java.util.ArrayList<>(data.whitelistedPlayers);
+        return data.getWhitelistNames();
     }
 }
