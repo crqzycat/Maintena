@@ -65,6 +65,23 @@ public class RestartManager {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
+
+        if (tickTimer == null) {
+            startTicker(); // nach shutdown() beim nächsten Serverstart wieder anwerfen
+        }
+    }
+
+    /**
+     * Beim Stoppen des Servers: Timer anhalten, laufenden Countdown verwerfen und die
+     * Server-Referenz freigeben. Die gespeicherten Zeitpläne bleiben erhalten.
+     */
+    public void shutdown() {
+        stopTicker();
+        tickPending.set(false);
+        server = null;
+        activeRestartTime = -1;
+        activeScheduleId = null;
+        announcedMilestones.clear();
     }
 
     /**

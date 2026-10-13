@@ -1,31 +1,17 @@
 package crqzycat.maintena.maintenance;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
 import crqzycat.maintena.util.PersistenceUtil;
-import net.fabricmc.loader.api.FabricLoader;
+import crqzycat.maintena.util.UsercacheCache;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MaintenanceManager {
-
-    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
 
     private static MaintenanceManager instance;
 
@@ -186,46 +172,9 @@ public class MaintenanceManager {
             return;
         }
 
-        if (current.bindLegacyEntries(readUsercache())) {
+        if (current.bindLegacyEntries(UsercacheCache.get())) {
             PersistenceUtil.saveData(current);
         }
-    }
-
-    /** Liest usercache.json: Name (Groß-/Kleinschreibung egal) zu UUID. */
-    private static Map<String, UUID> readUsercache() {
-        Map<String, UUID> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-
-        Path file = FabricLoader.getInstance().getGameDir().resolve("usercache.json");
-
-        if (!Files.exists(file)) {
-            return result;
-        }
-
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            JsonArray entries = JsonParser.parseReader(reader).getAsJsonArray();
-
-            for (JsonElement element : entries) {
-                if (!element.isJsonObject()) {
-                    continue;
-                }
-
-                JsonObject entry = element.getAsJsonObject();
-
-                if (!entry.has("name") || !entry.has("uuid")) {
-                    continue;
-                }
-
-                try {
-                    result.put(entry.get("name").getAsString(), UUID.fromString(entry.get("uuid").getAsString()));
-                } catch (IllegalArgumentException ignored) {
-                    // Eintrag mit ungültiger UUID überspringen
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("[Maintenance] Could not read usercache.json", e);
-        }
-
-        return result;
     }
 
     public boolean isEnabled() {
@@ -372,6 +321,17 @@ public class MaintenanceManager {
         }
     }
 
+    /**
+     * Beim Stoppen des Servers: Timer anhalten und die Server-Referenz freigeben (sonst läuft der
+     * Timer-Thread weiter und hält den alten Server im Speicher, z.B. beim Integrated Server).
+     * Der Wartungsstatus selbst bleibt gespeichert.
+     */
+    public void shutdown() {
+        stopAutoStopTimer();
+        tickPending.set(false);
+        server = null;
+    }
+
     public void setServer(MinecraftServer server) {
         this.server = server;
 
@@ -399,7 +359,7 @@ public class MaintenanceManager {
         // usercache.json enthält Name + UUID von jedem Spieler, der jemals gejoint ist
         // (auch offline Spieler) - die playerdata-Dateien sind immer nach UUID benannt,
         // daher lässt sich der Name daraus nicht rekonstruieren.
-        allPlayers.addAll(readUsercache().keySet());
+        allPlayers.addAll(UsercacheCache.get().keySet());
 
         return allPlayers;
     }

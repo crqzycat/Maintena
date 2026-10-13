@@ -12,6 +12,7 @@ import crqzycat.maintena.command.MaintenaCommandHandler;
 import crqzycat.maintena.event.LoginEventHandler;
 import crqzycat.maintena.event.ChatMuteHandler;
 import crqzycat.maintena.event.VanishHandler;
+import crqzycat.maintena.vanish.VanishManager;
 import crqzycat.maintena.event.FreezeHandler;
 import crqzycat.maintena.command.AliasCommandHandler;
 
@@ -46,6 +47,14 @@ public class Maintena implements ModInitializer {
             MaintenanceManager.getInstance().setServer(server);
             RestartManager.getInstance().setServer(server);
             AnnouncementManager.getInstance().setServer(server);
+        });
+
+        // Stop timers and release the server reference when the server shuts down
+        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
+            MaintenanceManager.getInstance().shutdown();
+            RestartManager.getInstance().shutdown();
+            AnnouncementManager.getInstance().shutdown();
+            VanishManager.getInstance().onServerStopping();
         });
     }
 }

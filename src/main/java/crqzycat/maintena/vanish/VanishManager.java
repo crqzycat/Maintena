@@ -158,6 +158,11 @@ public class VanishManager {
         onlineVanished.remove(player.nameAndId().id());
     }
 
+    /** Beim Stoppen des Servers ist niemand mehr online (der Vanish-Zustand selbst bleibt erhalten). */
+    public void onServerStopping() {
+        onlineVanished.clear();
+    }
+
     /** UUIDs aller Spieler im Vanish, die gerade online sind (thread-sicher, als Kopie). */
     public Set<UUID> getOnlineVanishedIds() {
         return Set.copyOf(onlineVanished);

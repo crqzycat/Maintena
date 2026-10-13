@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.util.CommandTreeUtil;
 import crqzycat.maintena.util.PermissionUtil;
 import crqzycat.maintena.util.PlayerNames;
 import com.mojang.brigadier.CommandDispatcher;
@@ -10,7 +11,6 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
-import com.mojang.brigadier.tree.CommandNode;
 import crqzycat.maintena.ban.BanManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -22,10 +22,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.NameAndId;
 import net.minecraft.server.players.UserBanListEntry;
 
-import java.lang.reflect.Field;
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -36,8 +34,8 @@ import java.util.concurrent.CompletableFuture;
  *   /unban <player>                     Ban aufheben
  *   /banlist [seite]                    alle aktiven Bans
  *
- * Die Vanilla-Befehle /ban und /banlist werden dafür aus dem Dispatcher entfernt und ersetzt.
- * /pardon, /ban-ip und /pardon-ip bleiben unverändert bestehen.
+ * Die Vanilla-Befehle /ban, /banlist und /ban-ip werden dafür aus dem Dispatcher entfernt
+ * (/ban-ip wird durch /ipban ersetzt). /pardon und /pardon-ip bleiben unverändert bestehen.
  */
 public class BanCommandHandler {
 
@@ -48,28 +46,10 @@ public class BanCommandHandler {
     /**
      * Entfernt die Vanilla-Befehle /ban, /banlist und /ban-ip, damit unsere Versionen
      * nicht mit ihnen zusammengeführt werden (Brigadier merged gleichnamige Knoten).
-     * /pardon und /pardon-ip bleiben unverändert bestehen.
+     * /ban-ip wird durch /ipban ersetzt. /pardon und /pardon-ip bleiben unverändert bestehen.
      */
-    @SuppressWarnings("unchecked")
     public static void removeVanillaCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
-        try {
-            Field children = CommandNode.class.getDeclaredField("children");
-            Field literals = CommandNode.class.getDeclaredField("literals");
-            children.setAccessible(true);
-            literals.setAccessible(true);
-
-            Object root = dispatcher.getRoot();
-            Map<String, ?> childMap = (Map<String, ?>) children.get(root);
-            Map<String, ?> literalMap = (Map<String, ?>) literals.get(root);
-
-            for (String name : new String[]{"ban", "banlist", "ban-ip"}) {
-                childMap.remove(name);
-                literalMap.remove(name);
-            }
-        } catch (ReflectiveOperationException e) {
-            System.err.println("[Maintena] Could not remove vanilla /ban and /banlist commands");
-            e.printStackTrace();
-        }
+        CommandTreeUtil.removeRootChildren(dispatcher, "ban", "banlist", "ban-ip");
     }
 
     // ==================== Befehlsbäume ====================

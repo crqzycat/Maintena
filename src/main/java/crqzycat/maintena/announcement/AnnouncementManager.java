@@ -54,6 +54,16 @@ public class AnnouncementManager {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
+
+        if (tickTimer == null) {
+            startTicker(); // nach shutdown() beim nächsten Serverstart wieder anwerfen
+        }
+    }
+
+    /** Beim Stoppen des Servers: Timer anhalten und die Server-Referenz freigeben. */
+    public void shutdown() {
+        stopTicker();
+        server = null;
     }
 
     /**

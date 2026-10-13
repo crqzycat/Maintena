@@ -12,6 +12,7 @@ import com.mojang.brigadier.suggestion.Suggestions;
 import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.RootCommandNode;
+import crqzycat.maintena.util.CommandTreeUtil;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -21,7 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -240,21 +240,10 @@ public final class AliasManager {
         return 1;
     }
 
-    /** Entfernt einen Knoten aus dem Befehlsbaum (wie BanCommandHandler.removeVanillaCommands). */
-    @SuppressWarnings("unchecked")
+    /** Entfernt einen Knoten aus dem Befehlsbaum (über CommandTreeUtil). */
     private static void removeNode(CommandDispatcher<CommandSourceStack> dispatcher, String name) {
-        try {
-            Field children = CommandNode.class.getDeclaredField("children");
-            Field literals = CommandNode.class.getDeclaredField("literals");
-            children.setAccessible(true);
-            literals.setAccessible(true);
-
-            Object root = dispatcher.getRoot();
-            ((Map<String, ?>) children.get(root)).remove(name);
-            ((Map<String, ?>) literals.get(root)).remove(name);
-
-        } catch (ReflectiveOperationException e) {
-            LOGGER.error("[Alias] Could not remove /{} from the command tree, it is gone after a restart", name, e);
+        if (!CommandTreeUtil.removeRootChildren(dispatcher, name)) {
+            LOGGER.error("[Alias] Could not remove /{} from the command tree, it is gone after a restart", name);
         }
     }
 
