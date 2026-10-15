@@ -5,16 +5,12 @@ import crqzycat.maintena.vanish.VanishManager;
 import net.fabricmc.fabric.api.entity.FakePlayer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.RemoteChatSession;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoRemovePacket;
-import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.waypoints.ServerWaypointManager;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffects;
@@ -26,7 +22,6 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.waypoints.WaypointTransmitter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -324,7 +319,7 @@ public final class DisguiseManager {
         for (UUID hiddenId : tabHidden) {
             ServerPlayer hidden = server.getPlayerList().getPlayer(hiddenId);
 
-            if (hidden != null && hidden != joined && mayKnow(hidden, joined)) {
+            if (hidden != null && hidden != joined && DisguiseViewers.mayKnow(hidden, joined)) {
                 joined.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(hiddenId)));
             }
         }
@@ -339,11 +334,11 @@ public final class DisguiseManager {
 
             ServerPlayer owner = server.getPlayerList().getPlayer(state.owner);
 
-            if (owner != null && !mayKnow(owner, joined)) {
+            if (owner != null && !DisguiseViewers.mayKnow(owner, joined)) {
                 continue;
             }
 
-            sendIdentityTo(joined, state.owner, state.packetSource);
+            DisguiseViewers.sendIdentityTo(joined, state.owner, state.packetSource);
         }
     }
 
@@ -438,7 +433,7 @@ public final class DisguiseManager {
 
         player.refreshDimensions(); // hitbox of the morph, see MaintenaDisguiseDimensionsMixin
         hideFromTab(player);        // a mob is not a player: "left the game", no tab entry
-        refreshWaypoint(player);    // ... and no locator bar entry
+        DisguiseViewers.refreshWaypoint(player);    // ... and no locator bar entry
         reshow(player);
 
         if (!DisguisePackets.isHookActive()) {
@@ -474,36 +469,17 @@ public final class DisguiseManager {
             state.packetSource.setChatSession(session);
         }
 
-        broadcastIdentity(player, state.packetSource);
+        DisguiseViewers.broadcastIdentity(player, state.packetSource);
         reshow(player);
 
         // The "new" player joins - unless the impersonated account is online right now,
         // then a join message would make no sense.
-        if (!state.nick && !isOnline(player, state.skin)) {
+        if (!state.nick && !DisguiseViewers.isOnline(player, state.skin)) {
             state.announced = true;
-            announceFake(player, state.skin.name(), true);
+            DisguiseViewers.announceFake(player, state.skin.name(), true);
         }
 
         return true;
-    }
-
-    private void broadcastIdentity(ServerPlayer subject, ServerPlayer source) {
-        MinecraftServer server = subject.level().getServer();
-
-        for (ServerPlayer viewer : server.getPlayerList().getPlayers()) {
-
-            if (viewer == subject || !mayKnow(subject, viewer)) {
-                continue;
-            }
-
-            sendIdentityTo(viewer, subject.getUUID(), source);
-        }
-    }
-
-    /** Replaces the player-info entry of {@code subjectId} on one viewer by the one of {@code source}. */
-    private static void sendIdentityTo(ServerPlayer viewer, UUID subjectId, ServerPlayer source) {
-        viewer.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(subjectId)));
-        viewer.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(source)));
     }
 
     /** Removes everything a disguise changed, without sending the entity again. */
@@ -521,7 +497,7 @@ public final class DisguiseManager {
 
                 if (!keepMorphHidden) {
                     showInTab(player);      // "joined the game", tab entry back
-                    refreshWaypoint(player);
+                    DisguiseViewers.refreshWaypoint(player);
                 }
             } else {
                 tabHidden.remove(state.owner);
@@ -532,10 +508,10 @@ public final class DisguiseManager {
             state.packetSource = null;
 
             if (online) {
-                broadcastIdentity(player, player); // real name and skin again
+                DisguiseViewers.broadcastIdentity(player, player); // real name and skin again
 
                 if (state.announced) {
-                    announceFake(player, state.skin.name(), false);
+                    DisguiseViewers.announceFake(player, state.skin.name(), false);
                 }
             }
 
@@ -546,68 +522,14 @@ public final class DisguiseManager {
     /** Tab list + chat: the player "left the game" (same messages as vanish). */
     private void hideFromTab(ServerPlayer player) {
         if (tabHidden.add(player.getUUID())) {
-            announce(player, false);
+            DisguiseViewers.announce(player, false);
         }
     }
 
     private void showInTab(ServerPlayer player) {
         if (tabHidden.remove(player.getUUID())) {
-            announce(player, true);
+            DisguiseViewers.announce(player, true);
         }
-    }
-
-    private void announce(ServerPlayer player, boolean joined) {
-        Component message = Component.translatable(
-                joined ? "multiplayer.player.joined" : "multiplayer.player.left",
-                player.getDisplayName()
-        ).withStyle(ChatFormatting.YELLOW);
-
-        for (ServerPlayer other : player.level().getServer().getPlayerList().getPlayers()) {
-
-            if (other == player || !mayKnow(player, other)) {
-                continue;
-            }
-
-            if (joined) {
-                other.connection.send(ClientboundPlayerInfoUpdatePacket.createPlayerInitializing(List.of(player)));
-            } else {
-                other.connection.send(new ClientboundPlayerInfoRemovePacket(List.of(player.getUUID())));
-            }
-
-            other.sendSystemMessage(message);
-        }
-    }
-
-    /** Is the account behind this profile currently on the server? */
-    private static boolean isOnline(ServerPlayer self, GameProfile profile) {
-        var players = self.level().getServer().getPlayerList();
-        ServerPlayer byId = players.getPlayer(profile.id());
-        ServerPlayer byName = players.getPlayerByName(profile.name());
-
-        return (byId != null && byId != self) || (byName != null && byName != self);
-    }
-
-    /** "Name joined/left the game" for a disguise identity. The tab list is handled by the identity swap. */
-    private void announceFake(ServerPlayer player, String name, boolean joined) {
-        Component message = Component.translatable(
-                joined ? "multiplayer.player.joined" : "multiplayer.player.left",
-                Component.literal(name)
-        ).withStyle(ChatFormatting.YELLOW);
-
-        for (ServerPlayer other : player.level().getServer().getPlayerList().getPlayers()) {
-            if (other != player && mayKnow(player, other)) {
-                other.sendSystemMessage(message);
-            }
-        }
-    }
-
-    /** Locator bar: rebuild the waypoint, the waypoint mixins decide whether it exists. */
-    private static void refreshWaypoint(ServerPlayer player) {
-        ServerWaypointManager waypoints = ((ServerLevel) player.level()).getWaypointManager();
-        WaypointTransmitter transmitter = player;
-
-        waypoints.untrackWaypoint(transmitter);
-        waypoints.trackWaypoint(transmitter);
     }
 
     private void release(UUID owner, ServerPlayer refresh) {
@@ -637,13 +559,6 @@ public final class DisguiseManager {
     private void reshow(ServerPlayer player) {
         reshowAt.put(player.getUUID(), player.level().getServer().getTickCount() + RESHOW_DELAY_TICKS);
         hideEntity(player);
-    }
-
-    /** Vanished players are unknown to viewers who may not see them. */
-    private static boolean mayKnow(ServerPlayer subject, ServerPlayer viewer) {
-        VanishManager vanish = VanishManager.getInstance();
-
-        return !(vanish.isVanished(subject) && !vanish.canSee(viewer));
     }
 
     private void tick(MinecraftServer server) {
@@ -747,7 +662,7 @@ public final class DisguiseManager {
         if (tracker != null) {
             tracker.maintena$hide(List.copyOf(((ServerLevel) player.level()).players()));
         } else {
-            refreshTracking(player);
+            DisguiseViewers.refreshTracking(player);
         }
     }
 
@@ -758,12 +673,8 @@ public final class DisguiseManager {
         if (tracker != null) {
             tracker.maintena$show(List.copyOf(((ServerLevel) player.level()).players()));
         } else {
-            refreshTracking(player);
+            DisguiseViewers.refreshTracking(player);
         }
     }
 
-    /** Fallback if no tracker is known: re-evaluates tracking the vanilla way. */
-    private static void refreshTracking(ServerPlayer player) {
-        ((ServerLevel) player.level()).getChunkSource().move(player);
-    }
 }

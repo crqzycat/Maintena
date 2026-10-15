@@ -6,26 +6,20 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
 
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MaintenanceManager {
 
     private static MaintenanceManager instance;
 
-    // volatile: werden vom Timer- und Netzwerk-Thread gelesen, vom Server-Thread ersetzt
+    // volatile: der Netzwerk-Thread liest (Server-Liste), der Server-Thread ersetzt
     private volatile MaintenanceData data;
     private volatile MaintenanceData.Config config;
     private volatile MinecraftServer server;
 
-    private Timer checkTimer;
     private long lastWarningTime = 0; // nur Server-Thread
-    private final AtomicBoolean tickPending = new AtomicBoolean(false);
 
     private static final long WARNING_INTERVAL = 5 * 60 * 1000;
-    private static final long CHECK_INTERVAL = 1000;
 
     private MaintenanceManager(MinecraftServer server) {
         this.server = server;
@@ -33,18 +27,6 @@ public class MaintenanceManager {
         this.config = PersistenceUtil.loadConfig();
 
         bindLegacyWhitelistEntries();
-
-        if (data.enabled && data.endTime != -1) {
-            startAutoStopTimer();
-        }
-    }
-
-    public static void initialize(MinecraftServer server) {
-        if (instance == null) {
-            instance = new MaintenanceManager(server);
-        } else {
-            instance.setServer(server);
-        }
     }
 
     public static MaintenanceManager getInstance() {
@@ -63,9 +45,7 @@ public class MaintenanceManager {
                     + (durationMinutes * 60 * 1000);
 
             data.setEndTime(endTime);
-            startAutoStopTimer();
         } else {
-            stopAutoStopTimer();
             data.clearEndTime();
         }
 
@@ -105,7 +85,6 @@ public class MaintenanceManager {
     public void disable() {
         data.enabled = false;
 
-        stopAutoStopTimer();
         data.clearEndTime();
 
         PersistenceUtil.saveData(data);
@@ -124,12 +103,6 @@ public class MaintenanceManager {
         this.config = PersistenceUtil.loadConfig();
 
         bindLegacyWhitelistEntries();
-
-        if (data.enabled && data.endTime != -1) {
-            startAutoStopTimer();
-        } else {
-            stopAutoStopTimer();
-        }
     }
 
     public void clearWhitelist() {
@@ -270,33 +243,12 @@ public class MaintenanceManager {
         return String.format("§b%d:%02d", minutes, seconds);
     }
 
-    private void startAutoStopTimer() {
-        stopAutoStopTimer();
-
-        checkTimer = new Timer("MaintenanceCheckTimer", true);
-
-        // Der Timer-Thread fasst selbst keinen Zustand an, er stößt nur den Check auf dem
-        // Server-Thread an (dort laufen auch die Commands). So gibt es keine Race Conditions.
-        checkTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                MinecraftServer current = server;
-
-                if (current == null || !tickPending.compareAndSet(false, true)) {
-                    return;
-                }
-
-                current.execute(() -> {
-                    tickPending.set(false);
-                    checkTimerTick();
-                });
-            }
-        }, 0, CHECK_INTERVAL);
-    }
-
-    /** Läuft auf dem Server-Thread. */
-    private void checkTimerTick() {
-        if (!data.enabled || data.endTime == -1) {
+    /**
+     * Wird jede Sekunde vom Server-Tick aufgerufen (Server-Thread): beendet die Wartung, wenn die
+     * Zeit abgelaufen ist, und warnt in den letzten 30 Minuten alle 5 Minuten.
+     */
+    public void tick() {
+        if (server == null || !data.enabled || data.endTime == -1) {
             return;
         }
 
@@ -319,13 +271,6 @@ public class MaintenanceManager {
         }
     }
 
-    private void stopAutoStopTimer() {
-        if (checkTimer != null) {
-            checkTimer.cancel();
-            checkTimer = null;
-        }
-    }
-
     private void broadcastMessage(String message) {
         if (server == null) {
             return;
@@ -339,13 +284,10 @@ public class MaintenanceManager {
     }
 
     /**
-     * Beim Stoppen des Servers: Timer anhalten und die Server-Referenz freigeben (sonst läuft der
-     * Timer-Thread weiter und hält den alten Server im Speicher, z.B. beim Integrated Server).
-     * Der Wartungsstatus selbst bleibt gespeichert.
+     * Beim Stoppen des Servers: die Server-Referenz freigeben (sonst hält der Manager den alten
+     * Server im Speicher, z.B. beim Integrated Server). Der Wartungsstatus bleibt gespeichert.
      */
     public void shutdown() {
-        stopAutoStopTimer();
-        tickPending.set(false);
         server = null;
     }
 
@@ -353,10 +295,6 @@ public class MaintenanceManager {
         this.server = server;
 
         bindLegacyWhitelistEntries();
-
-        if (data.enabled && data.endTime != -1) {
-            startAutoStopTimer();
-        }
     }
 
     /**

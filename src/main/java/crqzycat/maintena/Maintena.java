@@ -4,6 +4,7 @@ import crqzycat.maintena.disguise.DisguiseManager;
 import crqzycat.maintena.event.DisguiseHandler;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import crqzycat.maintena.maintenance.MaintenanceManager;
 import crqzycat.maintena.restart.RestartManager;
 import crqzycat.maintena.announcement.AnnouncementManager;
@@ -17,6 +18,8 @@ import crqzycat.maintena.event.FreezeHandler;
 import crqzycat.maintena.command.AliasCommandHandler;
 
 public class Maintena implements ModInitializer {
+
+    private static int secondTicks = 0;
 
     @Override
     public void onInitialize() {
@@ -49,7 +52,20 @@ public class Maintena implements ModInitializer {
             AnnouncementManager.getInstance().setServer(server);
         });
 
-        // Stop timers and release the server reference when the server shuts down
+        // Alle zeitgesteuerten Prüfungen (Wartungs-Ende, Restarts, Announcements) laufen einmal pro
+        // Sekunde auf dem Server-Thread, ohne eigene Timer-Threads
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            if (++secondTicks < 20) {
+                return;
+            }
+
+            secondTicks = 0;
+            MaintenanceManager.getInstance().tick();
+            RestartManager.getInstance().tick();
+            AnnouncementManager.getInstance().tick();
+        });
+
+        // Release the server references when the server shuts down
         ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
             MaintenanceManager.getInstance().shutdown();
             RestartManager.getInstance().shutdown();

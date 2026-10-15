@@ -26,8 +26,11 @@ import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
@@ -61,6 +64,13 @@ public final class AliasManager {
     /** Alias -> Befehl (ein Wort, oder Befehl + Unterbefehl) */
     private final Map<String, String> aliases = new LinkedHashMap<>();
 
+    /**
+     * Aliase, die wirklich im Befehlsbaum stehen. Ein Alias, dessen Name schon ein anderer Befehl
+     * belegt hat (Warnung beim Start), ist in aliases, aber hier nicht: sein Knoten gehört nicht uns
+     * und darf beim Entfernen oder Neuladen nicht gelöscht werden.
+     */
+    private final Set<String> registered = new HashSet<>();
+
     private AliasManager() {
         load();
     }
@@ -78,14 +88,42 @@ public final class AliasManager {
     }
 
     /** Hängt alle gespeicherten Aliase in einen frisch gebauten Befehlsbaum ein. */
-    public void registerAll(CommandDispatcher<CommandSourceStack> dispatcher) {
+    public synchronized void registerAll(CommandDispatcher<CommandSourceStack> dispatcher) {
+        registered.clear();
+
         for (Map.Entry<String, String> entry : all().entrySet()) {
             String error = register(dispatcher, entry.getKey(), entry.getValue(), null);
 
             if (error != null) {
                 LOGGER.warn("[Alias] /{} for /{} was not registered: {}", entry.getKey(), entry.getValue(), error);
+            } else {
+                registered.add(entry.getKey());
             }
         }
+    }
+
+    /**
+     * Lädt aliases.json neu (z.B. nach einer Änderung von Hand) und passt den Befehlsbaum sofort an.
+     * Ist die Datei nicht lesbar, bleibt alles, wie es war (der Fehler steht im Log).
+     */
+    public synchronized void reload(MinecraftServer server) {
+        Map<String, String> loaded = readFile();
+
+        if (loaded == null) {
+            return;
+        }
+
+        CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+
+        for (String alias : List.copyOf(registered)) {
+            removeNode(dispatcher, alias);
+        }
+
+        aliases.clear();
+        aliases.putAll(loaded);
+
+        registerAll(dispatcher);
+        resendCommands(server);
     }
 
     /**
@@ -118,6 +156,7 @@ public final class AliasManager {
         }
 
         aliases.put(alias, command);
+        registered.add(alias);
         save();
         resendCommands(server);
 
@@ -130,7 +169,10 @@ public final class AliasManager {
             return false;
         }
 
-        removeNode(server.getCommands().getDispatcher(), alias);
+        if (registered.remove(alias)) {
+            removeNode(server.getCommands().getDispatcher(), alias);
+        }
+
         save();
         resendCommands(server);
 
@@ -255,18 +297,26 @@ public final class AliasManager {
     }
 
     private void load() {
+        Map<String, String> loaded = readFile();
+
+        if (loaded != null) {
+            aliases.putAll(loaded);
+        }
+    }
+
+    /** @return die gespeicherten Aliase (leer, wenn es die Datei nicht gibt), null bei einem Lesefehler */
+    private static Map<String, String> readFile() {
         if (!Files.exists(FILE)) {
-            return;
+            return new LinkedHashMap<>();
         }
 
         try {
             Map<String, String> loaded = GSON.fromJson(Files.readString(FILE, StandardCharsets.UTF_8), MAP_TYPE);
 
-            if (loaded != null) {
-                aliases.putAll(loaded);
-            }
+            return loaded != null ? loaded : new LinkedHashMap<>();
         } catch (IOException | RuntimeException e) {
             LOGGER.error("[Alias] Could not read {}", FILE, e);
+            return null;
         }
     }
 

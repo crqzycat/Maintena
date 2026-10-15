@@ -1,24 +1,26 @@
 package crqzycat.maintena.restart;
 
 import crqzycat.maintena.util.PersistenceUtil;
+import crqzycat.maintena.util.ScheduleUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RestartManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
+
+    /** Maintena stoppt den Server nur. Wieder gestartet wird er von außen (Skript, Dienst, Docker). */
+    private static final String RESTART_HINT =
+            "The server only stops, a start script or service has to start it again.";
 
     private static RestartManager instance;
 
@@ -26,17 +28,10 @@ public class RestartManager {
     private volatile RestartData.Config config;
     private volatile MinecraftServer server;
 
-    private Timer tickTimer;
-    private final AtomicBoolean tickPending = new AtomicBoolean(false);
-    private static final long TICK_INTERVAL = 1000;
-
     // Aktuell laufender Countdown, -1 = kein Restart angesetzt
     private long activeRestartTime = -1;
     private String activeScheduleId = null;
     private final Set<Integer> announcedMilestones = new HashSet<>();
-
-    private static final DateTimeFormatter NEXT_TRIGGER_FORMAT =
-            DateTimeFormatter.ofPattern("EEE HH:mm");
 
     private RestartManager(MinecraftServer server) {
         this.server = server;
@@ -44,15 +39,6 @@ public class RestartManager {
         this.config = PersistenceUtil.loadRestartConfig();
 
         recomputeMissingNextTriggers();
-        startTicker();
-    }
-
-    public static void initialize(MinecraftServer server) {
-        if (instance == null) {
-            instance = new RestartManager(server);
-        } else {
-            instance.setServer(server);
-        }
     }
 
     public static RestartManager getInstance() {
@@ -66,18 +52,16 @@ public class RestartManager {
     public void setServer(MinecraftServer server) {
         this.server = server;
 
-        if (tickTimer == null) {
-            startTicker(); // nach shutdown() beim nächsten Serverstart wieder anwerfen
+        if (!data.schedules.isEmpty()) {
+            LOGGER.info("[Restart] Restart schedules are set. {}", RESTART_HINT);
         }
     }
 
     /**
-     * Beim Stoppen des Servers: Timer anhalten, laufenden Countdown verwerfen und die
-     * Server-Referenz freigeben. Die gespeicherten Zeitpläne bleiben erhalten.
+     * Beim Stoppen des Servers: laufenden Countdown verwerfen und die Server-Referenz
+     * freigeben. Die gespeicherten Zeitpläne bleiben erhalten.
      */
     public void shutdown() {
-        stopTicker();
-        tickPending.set(false);
         server = null;
         activeRestartTime = -1;
         activeScheduleId = null;
@@ -271,77 +255,26 @@ public class RestartManager {
             }
         }
 
+        sb.append("\n§7").append(RESTART_HINT);
+
         return sb.toString();
     }
 
     public String describeSchedule(RestartSchedule schedule) {
-        if (schedule.type == RestartSchedule.Type.INTERVAL) {
-            long hours = schedule.intervalMinutes / 60;
-            long minutes = schedule.intervalMinutes % 60;
-
-            if (hours == 0) {
-                return "every " + minutes + "m";
-            }
-
-            if (minutes == 0) {
-                return "every " + hours + "h";
-            }
-
-            return "every " + hours + "h " + minutes + "m";
-        }
-
-        String time = String.format("%02d:%02d", schedule.hour, schedule.minute);
-
-        if (schedule.frequency == RestartSchedule.Frequency.DAILY) {
-            return "daily at " + time;
-        }
-
-        return "every " + capitalize(schedule.weekday.name()) + " at " + time;
+        return ScheduleUtil.describe(
+                schedule.type == RestartSchedule.Type.INTERVAL, schedule.intervalMinutes,
+                schedule.hour, schedule.minute,
+                schedule.frequency == RestartSchedule.Frequency.DAILY, schedule.weekday);
     }
 
     private String formatNextTrigger(long millis) {
-        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
-                .format(NEXT_TRIGGER_FORMAT);
-    }
-
-    private static String capitalize(String s) {
-        return s.charAt(0) + s.substring(1).toLowerCase();
+        return ScheduleUtil.formatNextTrigger(millis);
     }
 
     // ==================== Tick-Loop ====================
 
-    private void startTicker() {
-        stopTicker();
-
-        tickTimer = new Timer("RestartCheckTimer", true);
-
-        tickTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                // Der Timer-Thread fasst keinen Zustand an: tick() läuft auf dem Server-Thread,
-                // wie die Commands. So gibt es keine Race Conditions auf data/announcedMilestones.
-                MinecraftServer current = server;
-
-                if (current == null || !tickPending.compareAndSet(false, true)) {
-                    return;
-                }
-
-                current.execute(() -> {
-                    tickPending.set(false);
-                    tick();
-                });
-            }
-        }, 0, TICK_INTERVAL);
-    }
-
-    private void stopTicker() {
-        if (tickTimer != null) {
-            tickTimer.cancel();
-            tickTimer = null;
-        }
-    }
-
-    private void tick() {
+    /** Wird jede Sekunde vom Server-Tick aufgerufen (Server-Thread). */
+    public void tick() {
         if (server == null) {
             return;
         }
@@ -449,32 +382,10 @@ public class RestartManager {
      * Berechnet den nächsten Auslösezeitpunkt einer Regel, ausgehend von afterMillis.
      */
     private long computeNextTrigger(RestartSchedule schedule, long afterMillis) {
-        if (schedule.type == RestartSchedule.Type.INTERVAL) {
-            return afterMillis + schedule.intervalMinutes * 60_000L;
-        }
-
-        ZoneId zone = ZoneId.systemDefault();
-        ZonedDateTime after = Instant.ofEpochMilli(afterMillis).atZone(zone);
-        ZonedDateTime candidate = after
-                .withHour(schedule.hour)
-                .withMinute(schedule.minute)
-                .withSecond(0)
-                .withNano(0);
-
-        if (schedule.frequency == RestartSchedule.Frequency.DAILY) {
-            if (!candidate.isAfter(after)) {
-                candidate = candidate.plusDays(1);
-            }
-
-            return candidate.toInstant().toEpochMilli();
-        }
-
-        // WEEKLY
-        while (candidate.getDayOfWeek() != schedule.weekday || !candidate.isAfter(after)) {
-            candidate = candidate.plusDays(1);
-        }
-
-        return candidate.toInstant().toEpochMilli();
+        return ScheduleUtil.nextTrigger(
+                schedule.type == RestartSchedule.Type.INTERVAL, schedule.intervalMinutes,
+                schedule.hour, schedule.minute,
+                schedule.frequency == RestartSchedule.Frequency.DAILY, schedule.weekday, afterMillis);
     }
 
     /**

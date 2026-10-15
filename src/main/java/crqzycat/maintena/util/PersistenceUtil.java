@@ -39,7 +39,7 @@ import java.util.UUID;
  */
 public class PersistenceUtil {
     private static final Logger LOGGER = LoggerFactory.getLogger("Maintena");
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final Path CONFIG_DIR = FabricLoader.getInstance().getConfigDir().resolve("maintena");
     private static final File DATA_FILE = CONFIG_DIR.resolve("maintenance.json").toFile();
     private static final File CONFIG_FILE = CONFIG_DIR.resolve("config.json").toFile();
@@ -135,12 +135,27 @@ public class PersistenceUtil {
         }
     }
 
-    /** Lädt ein Objekt oder die Standardwerte; legt bei fehlender Datei die Standard-Datei an. */
+    /**
+     * Lädt ein Objekt oder die Standardwerte.
+     *
+     * <ul>
+     *   <li>Fehlt die Datei, wird (bei createIfMissing) die Standard-Datei angelegt.</li>
+     *   <li>Steht in der Datei für ein Feld "null", gilt der Standardwert.</li>
+     *   <li>Fehlen in einer vorhandenen Datei Einstellungen (neue Version), werden sie mit ihren
+     *       Standardwerten ergänzt und die Datei wird neu geschrieben (bei createIfMissing).</li>
+     * </ul>
+     */
     private static <T> T loadOrDefault(File file, Class<T> type, T defaults, boolean createIfMissing) {
         boolean existed = file.exists();
         T loaded = readJson(file, type);
 
         if (loaded != null) {
+            fillNullFields(loaded, defaults);
+
+            if (createIfMissing && lacksKeys(file, defaults)) {
+                writeJson(file, loaded);
+            }
+
             return loaded;
         }
 
@@ -149,6 +164,51 @@ public class PersistenceUtil {
         }
 
         return defaults;
+    }
+
+    /** Ersetzt Felder, die in der Datei ausdrücklich "null" waren, durch den Standardwert. */
+    private static <T> void fillNullFields(T loaded, T defaults) {
+        for (java.lang.reflect.Field field : loaded.getClass().getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+
+            if (java.lang.reflect.Modifier.isStatic(modifiers) || java.lang.reflect.Modifier.isFinal(modifiers)
+                    || field.getType().isPrimitive()) {
+                continue;
+            }
+
+            try {
+                field.setAccessible(true);
+
+                if (field.get(loaded) == null) {
+                    field.set(loaded, field.get(defaults));
+                }
+            } catch (IllegalAccessException | RuntimeException e) {
+                LOGGER.warn("[Persistence] Could not check field {}", field.getName(), e);
+            }
+        }
+    }
+
+    /** Fehlt in der Datei mindestens eine Einstellung, die es in der Standard-Config gibt? */
+    private static boolean lacksKeys(File file, Object defaults) {
+        try {
+            JsonElement parsed = com.google.gson.JsonParser.parseString(Files.readString(file.toPath(), StandardCharsets.UTF_8));
+
+            if (!parsed.isJsonObject()) {
+                return false;
+            }
+
+            JsonObject present = parsed.getAsJsonObject();
+
+            for (String key : GSON.toJsonTree(defaults).getAsJsonObject().keySet()) {
+                if (!present.has(key)) {
+                    return true;
+                }
+            }
+        } catch (IOException | RuntimeException e) {
+            // Nicht lesbar oder kein Objekt: nichts ergänzen, readJson hat das schon behandelt
+        }
+
+        return false;
     }
 
     private static boolean has(JsonObject json, String key) {
@@ -168,6 +228,9 @@ public class PersistenceUtil {
     }
 
     // ==================== Maintenance ====================
+
+    // Die Wartungsdaten werden von Hand gelesen und geschrieben, weil die Whitelist in zwei Formaten
+    // vorkommen kann (alt: nur Namen als Text, neu: Name + UUID). Alle anderen Dateien laufen über Gson.
 
     public static void saveData(MaintenanceData data) {
         JsonObject json = new JsonObject();
@@ -263,46 +326,11 @@ public class PersistenceUtil {
     }
 
     public static void saveConfig(MaintenanceData.Config config) {
-        JsonObject json = new JsonObject();
-        json.addProperty("broadcastStart", config.broadcastStart);
-        json.addProperty("broadcastEnd", config.broadcastEnd);
-        json.addProperty("broadcastWarning", config.broadcastWarning);
-        json.addProperty("statusMessage", config.statusMessage);
-        json.addProperty("kickMessage", config.kickMessage);
-        json.addProperty("motdMaintenanceLine", config.motdMaintenanceLine);
-        json.addProperty("motdMaintenanceTimed", config.motdMaintenanceTimed);
-        json.addProperty("motdMaintenanceNoTime", config.motdMaintenanceNoTime);
-
-        writeJson(CONFIG_FILE, json);
+        writeJson(CONFIG_FILE, config);
     }
 
     public static MaintenanceData.Config loadConfig() {
-        MaintenanceData.Config config = new MaintenanceData.Config();
-
-        if (!CONFIG_FILE.exists()) {
-            saveConfig(config); // Create default config
-            return config;
-        }
-
-        JsonObject json = readJson(CONFIG_FILE, JsonObject.class);
-
-        if (json != null) {
-            config.broadcastStart = string(json, "broadcastStart", config.broadcastStart);
-            config.broadcastEnd = string(json, "broadcastEnd", config.broadcastEnd);
-            config.broadcastWarning = string(json, "broadcastWarning", config.broadcastWarning);
-            config.statusMessage = string(json, "statusMessage", config.statusMessage);
-            config.kickMessage = string(json, "kickMessage", config.kickMessage);
-            config.motdMaintenanceLine = string(json, "motdMaintenanceLine", config.motdMaintenanceLine);
-            config.motdMaintenanceTimed = string(json, "motdMaintenanceTimed", config.motdMaintenanceTimed);
-            config.motdMaintenanceNoTime = string(json, "motdMaintenanceNoTime", config.motdMaintenanceNoTime);
-
-            // Neue Einstellung aus einer älteren Version: in die Datei schreiben, damit man sie findet
-            if (!has(json, "kickMessage")) {
-                saveConfig(config);
-            }
-        }
-
-        return config;
+        return loadOrDefault(CONFIG_FILE, MaintenanceData.Config.class, new MaintenanceData.Config(), true);
     }
 
     // ==================== Restart Schedules ====================

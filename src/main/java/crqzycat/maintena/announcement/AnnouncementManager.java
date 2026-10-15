@@ -1,6 +1,7 @@
 package crqzycat.maintena.announcement;
 
 import crqzycat.maintena.util.PersistenceUtil;
+import crqzycat.maintena.util.ScheduleUtil;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket;
@@ -9,13 +10,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.time.DayOfWeek;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
 
 public class AnnouncementManager {
 
@@ -25,15 +20,9 @@ public class AnnouncementManager {
     private AnnouncementData.Config config;
     private volatile MinecraftServer server;
 
-    private Timer tickTimer;
-    private static final long TICK_INTERVAL = 1000;
-
     // War der Server länger offline als dieses Fenster, wird eine verpasste Announcement
     // nicht nachgeholt, sondern nur der nächste Zeitpunkt berechnet.
     private static final long MISSED_GRACE_MILLIS = 60_000L;
-
-    private static final DateTimeFormatter NEXT_TRIGGER_FORMAT =
-            DateTimeFormatter.ofPattern("EEE HH:mm");
 
     private AnnouncementManager(MinecraftServer server) {
         this.server = server;
@@ -41,7 +30,6 @@ public class AnnouncementManager {
         this.config = PersistenceUtil.loadAnnouncementConfig();
 
         recomputeMissingNextTriggers();
-        startTicker();
     }
 
     public static AnnouncementManager getInstance() {
@@ -54,15 +42,10 @@ public class AnnouncementManager {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
-
-        if (tickTimer == null) {
-            startTicker(); // nach shutdown() beim nächsten Serverstart wieder anwerfen
-        }
     }
 
-    /** Beim Stoppen des Servers: Timer anhalten und die Server-Referenz freigeben. */
+    /** Beim Stoppen des Servers: die Server-Referenz freigeben. */
     public void shutdown() {
-        stopTicker();
         server = null;
     }
 
@@ -203,74 +186,29 @@ public class AnnouncementManager {
     }
 
     public String describeSchedule(AnnouncementSchedule schedule) {
-        if (schedule.type == AnnouncementSchedule.Type.INTERVAL) {
-            long hours = schedule.intervalMinutes / 60;
-            long minutes = schedule.intervalMinutes % 60;
-
-            if (hours == 0) {
-                return "every " + minutes + "m";
-            }
-
-            if (minutes == 0) {
-                return "every " + hours + "h";
-            }
-
-            return "every " + hours + "h " + minutes + "m";
-        }
-
-        String time = String.format("%02d:%02d", schedule.hour, schedule.minute);
-
-        if (schedule.frequency == AnnouncementSchedule.Frequency.DAILY) {
-            return "daily at " + time;
-        }
-
-        return "every " + capitalize(schedule.weekday.name()) + " at " + time;
+        return ScheduleUtil.describe(
+                schedule.type == AnnouncementSchedule.Type.INTERVAL, schedule.intervalMinutes,
+                schedule.hour, schedule.minute,
+                schedule.frequency == AnnouncementSchedule.Frequency.DAILY, schedule.weekday);
     }
 
     private String formatNextTrigger(long millis) {
-        return ZonedDateTime.ofInstant(Instant.ofEpochMilli(millis), ZoneId.systemDefault())
-                .format(NEXT_TRIGGER_FORMAT);
+        return ScheduleUtil.formatNextTrigger(millis);
     }
 
     private static String preview(String message) {
         return message.length() <= 50 ? message : message.substring(0, 47) + "...";
     }
 
-    private static String capitalize(String s) {
-        return s.charAt(0) + s.substring(1).toLowerCase();
-    }
-
     // ==================== Tick-Loop ====================
 
-    private void startTicker() {
-        stopTicker();
-
-        tickTimer = new Timer("AnnouncementCheckTimer", true);
-
-        tickTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                tick();
-            }
-        }, 0, TICK_INTERVAL);
-    }
-
-    private void stopTicker() {
-        if (tickTimer != null) {
-            tickTimer.cancel();
-            tickTimer = null;
-        }
-    }
-
-    private void tick() {
-        MinecraftServer current = server;
-
-        if (current == null) {
+    /** Wird jede Sekunde vom Server-Tick aufgerufen (Server-Thread). */
+    public void tick() {
+        if (server == null) {
             return;
         }
 
-        // Alles Weitere läuft auf dem Server-Thread (gleicher Thread wie die Commands)
-        current.execute(this::processDue);
+        processDue();
     }
 
     private void processDue() {
@@ -301,32 +239,10 @@ public class AnnouncementManager {
      * Berechnet den nächsten Auslösezeitpunkt einer Regel, ausgehend von afterMillis.
      */
     private long computeNextTrigger(AnnouncementSchedule schedule, long afterMillis) {
-        if (schedule.type == AnnouncementSchedule.Type.INTERVAL) {
-            return afterMillis + schedule.intervalMinutes * 60_000L;
-        }
-
-        ZoneId zone = ZoneId.systemDefault();
-        ZonedDateTime after = Instant.ofEpochMilli(afterMillis).atZone(zone);
-        ZonedDateTime candidate = after
-                .withHour(schedule.hour)
-                .withMinute(schedule.minute)
-                .withSecond(0)
-                .withNano(0);
-
-        if (schedule.frequency == AnnouncementSchedule.Frequency.DAILY) {
-            if (!candidate.isAfter(after)) {
-                candidate = candidate.plusDays(1);
-            }
-
-            return candidate.toInstant().toEpochMilli();
-        }
-
-        // WEEKLY
-        while (candidate.getDayOfWeek() != schedule.weekday || !candidate.isAfter(after)) {
-            candidate = candidate.plusDays(1);
-        }
-
-        return candidate.toInstant().toEpochMilli();
+        return ScheduleUtil.nextTrigger(
+                schedule.type == AnnouncementSchedule.Type.INTERVAL, schedule.intervalMinutes,
+                schedule.hour, schedule.minute,
+                schedule.frequency == AnnouncementSchedule.Frequency.DAILY, schedule.weekday, afterMillis);
     }
 
     /**

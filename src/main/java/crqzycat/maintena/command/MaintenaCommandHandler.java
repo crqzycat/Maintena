@@ -1,5 +1,6 @@
 package crqzycat.maintena.command;
 
+import crqzycat.maintena.alias.AliasManager;
 import crqzycat.maintena.util.PermissionUtil;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -105,23 +106,21 @@ public class MaintenaCommandHandler {
         // Vanilla /ban und /banlist durch die Maintena-Versionen ersetzen
         BanCommandHandler.removeVanillaCommands(dispatcher);
 
-        dispatcher.register(Commands.literal("maintena").requires(PermissionUtil.requires(PermissionUtil.MENU))
+        dispatcher.register(buildMaintenaTree());
+    }
+
+    /**
+     * /maintena: Hauptmenü plus alle Befehle als Unterbefehle. Die Bäume sind dieselben wie bei den
+     * eigenständigen Befehlen (/ban, /mute, ...), nur dass sie ohne Argumente das passende Menü öffnen.
+     */
+    private static LiteralArgumentBuilder<CommandSourceStack> buildMaintenaTree() {
+        return Commands.literal("maintena")
+                .requires(PermissionUtil.requires(PermissionUtil.MENU))
 
                 // /maintena ohne Argumente -> Hauptmenü
                 .executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAIN))
 
-                .then(Commands.literal("reload").executes(ctx -> {
-                    MaintenanceManager.getInstance().reload();
-                    RestartManager.getInstance().reload();
-                    AnnouncementManager.getInstance().reload();
-                    BanManager.getInstance().reload();
-                    MuteManager.getInstance().reload();
-                    FreezeManager.getInstance().reload();
-
-                    ctx.getSource().sendSuccess(() -> Component.literal("§a✓ Maintena config reloaded"), true);
-
-                    return 1;
-                }))
+                .then(buildReloadTree())
 
                 // /maintena restart ... (wie /restart, nur dass ohne Argumente das Menü aufgeht)
                 .then(buildRestartTree(true))
@@ -129,29 +128,65 @@ public class MaintenaCommandHandler {
                 // /maintena announce ... (identischer Baum wie das eigenständige /announce)
                 .then(AnnouncementCommandHandler.buildAnnounceTree(true))
 
-                // /maintena ban|unban|banlist ... (identisch zu den eigenständigen Befehlen)
-                .then(BanCommandHandler.buildBanTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.BAN))).then(BanCommandHandler.buildUnbanTree()).then(BanCommandHandler.buildBanlistTree()).then(IpBanCommandHandler.buildIpTree()).then(IpBanCommandHandler.buildIpBanTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.IP_BAN))).then(IpBanCommandHandler.buildIpUnbanTree()).then(IpBanCommandHandler.buildIpBanlistTree())
+                // /maintena ban|unban|banlist
+                .then(opensMenu(BanCommandHandler.buildBanTree(), SettingsGUIHandler.Page.BAN))
+                .then(BanCommandHandler.buildUnbanTree())
+                .then(BanCommandHandler.buildBanlistTree())
 
-                // /maintena mute|unmute|mutelist ... (identisch zu den eigenständigen Befehlen)
-                .then(MuteCommandHandler.buildMuteTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MUTE))).then(MuteCommandHandler.buildUnmuteTree()).then(MuteCommandHandler.buildMutelistTree())
+                // /maintena ip|ipban|ipunban|ipbanlist
+                .then(IpBanCommandHandler.buildIpTree())
+                .then(opensMenu(IpBanCommandHandler.buildIpBanTree(), SettingsGUIHandler.Page.IP_BAN))
+                .then(IpBanCommandHandler.buildIpUnbanTree())
+                .then(IpBanCommandHandler.buildIpBanlistTree())
 
-                // /maintena vanish ... (identisch zu /vanish, ohne Argumente öffnet sich das Menü)
-                .then(VanishCommandHandler.buildVanishTree("vanish").executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.VANISH)))
+                // /maintena mute|unmute|mutelist
+                .then(opensMenu(MuteCommandHandler.buildMuteTree(), SettingsGUIHandler.Page.MUTE))
+                .then(MuteCommandHandler.buildUnmuteTree())
+                .then(MuteCommandHandler.buildMutelistTree())
 
-                // /maintena disguise|undisguise ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
-                .then(DisguiseCommandHandler.buildDisguiseTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.DISGUISE))).then(DisguiseCommandHandler.buildUndisguiseTree())
+                // /maintena vanish
+                .then(opensMenu(VanishCommandHandler.buildVanishTree("vanish"), SettingsGUIHandler.Page.VANISH))
 
-                // /maintena freeze|unfreeze ... (identisch zu den eigenständigen Befehlen, ohne Argumente öffnet sich das Menü)
-                .then(FreezeCommandHandler.buildFreezeTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.FREEZE))).then(FreezeCommandHandler.buildUnfreezeTree())
+                // /maintena disguise|undisguise
+                .then(opensMenu(DisguiseCommandHandler.buildDisguiseTree(), SettingsGUIHandler.Page.DISGUISE))
+                .then(DisguiseCommandHandler.buildUndisguiseTree())
 
-                // /maintena nick ... (identisch zum eigenständigen /nick, ohne Argumente öffnet sich das Menü)
-                .then(NickCommandHandler.buildNickTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.NICK))).then(NickCommandHandler.buildUnnickTree())
+                // /maintena freeze|unfreeze
+                .then(opensMenu(FreezeCommandHandler.buildFreezeTree(), SettingsGUIHandler.Page.FREEZE))
+                .then(FreezeCommandHandler.buildUnfreezeTree())
 
-                // /maintena alias ... (identisch zum eigenständigen /alias)
-                .then(AliasCommandHandler.buildAliasTree().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.ALIAS)))
+                // /maintena nick|unnick
+                .then(opensMenu(NickCommandHandler.buildNickTree(), SettingsGUIHandler.Page.NICK))
+                .then(NickCommandHandler.buildUnnickTree())
 
-                // /maintena maintenance ... (identischer Baum wie das eigenständige /maintenance)
-                .then(MaintenanceCommandHandler.buildMaintenanceCommand().executes(ctx -> SettingsGUIHandler.open(ctx, SettingsGUIHandler.Page.MAINTENANCE))));
+                // /maintena alias
+                .then(opensMenu(AliasCommandHandler.buildAliasTree(), SettingsGUIHandler.Page.ALIAS))
+
+                // /maintena maintenance (identischer Baum wie das eigenständige /maintenance)
+                .then(opensMenu(MaintenanceCommandHandler.buildMaintenanceCommand(), SettingsGUIHandler.Page.MAINTENANCE));
+    }
+
+    /** Lässt einen Befehl ohne Argumente das passende Menü öffnen. */
+    private static LiteralArgumentBuilder<CommandSourceStack> opensMenu(
+            LiteralArgumentBuilder<CommandSourceStack> command, SettingsGUIHandler.Page page) {
+        return command.executes(ctx -> SettingsGUIHandler.open(ctx, page));
+    }
+
+    /** /maintena reload: lädt alle Config- und Datendateien neu. */
+    private static LiteralArgumentBuilder<CommandSourceStack> buildReloadTree() {
+        return Commands.literal("reload").executes(ctx -> {
+            MaintenanceManager.getInstance().reload();
+            RestartManager.getInstance().reload();
+            AnnouncementManager.getInstance().reload();
+            BanManager.getInstance().reload();
+            MuteManager.getInstance().reload();
+            FreezeManager.getInstance().reload();
+            AliasManager.getInstance().reload(ctx.getSource().getServer());
+
+            ctx.getSource().sendSuccess(() -> Component.literal("§a✓ Maintena config reloaded"), true);
+
+            return 1;
+        });
     }
 
     /**

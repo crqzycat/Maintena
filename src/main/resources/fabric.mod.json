@@ -3,29 +3,21 @@
   "id": "maintena",
   "version": "${version}",
   "name": "Maintena",
-  "description": "Server-side maintenance mode system with whitelist management, auto-stop timer, and configurable messages.",
+  "description": "Server-side admin toolkit: maintenance mode, scheduled restarts and announcements, bans and IP bans, mutes, freeze, vanish, nicknames, disguises, command aliases and a settings menu. Supports LuckPerms.",
   "authors": ["crqzycat"],
-  "contact": {"https://discord.gg/sTPjJc2bM5": "Discord"},
+  "contact": {
+    "discord": "https://discord.gg/sTPjJc2bM5"
+  },
   "license": "All-Rights-Reserved",
   "icon": "assets/maintena/icon.png",
-  "environment": "*",
+  "environment": "server",
   "entrypoints": {
-    "fabric-datagen": [
-      "crqzycat.maintena.client.MaintenaDataGenerator"
-    ],
-    "client": [
-      "crqzycat.maintena.client.MaintenaClient"
-    ],
     "main": [
       "crqzycat.maintena.Maintena"
     ]
   },
   "mixins": [
-    "maintena.mixins.json",
-    {
-      "config": "maintena.client.mixins.json",
-      "environment": "client"
-    }
+    "maintena.mixins.json"
   ],
   "depends": {
     "fabricloader": ">=${loader_version}",
